@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        font-family: -apple-system, sans-serif;
+      }
+      body {
+        width: 320px;
+        background: #fff;
+      }
+      .header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 14px 16px;
+        border-bottom: 1px solid #f0f0f0;
+      }
+      .logo {
+        width: 24px;
+        height: 24px;
+        background: #10b981;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .title {
+        font-size: 14px;
+        font-weight: 600;
+        color: #111;
+      }
+      .badge {
+        margin-left: auto;
+        font-size: 10px;
+        padding: 2px 8px;
+        border-radius: 20px;
+        font-weight: 500;
+      }
+      .badge.idle {
+        background: #f3f4f6;
+        color: #9ca3af;
+      }
+      .badge.recording {
+        background: #fee2e2;
+        color: #dc2626;
+      }
+      .url-display {
+        padding: 6px 16px 0;
+        font-size: 11px;
+        color: #9ca3af;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .status-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 16px;
+        background: #f9fafb;
+        font-size: 12px;
+        color: #6b7280;
+        margin-top: 6px;
+      }
+      .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #d1d5db;
+        flex-shrink: 0;
+      }
+      .dot.recording {
+        background: #ef4444;
+        animation: blink 1s infinite;
+      }
+      @keyframes blink {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.3;
+        }
+      }
+      .current-count {
+        margin-left: auto;
+        font-size: 11px;
+        color: #10b981;
+        font-weight: 500;
+      }
+      .controls {
+        padding: 10px 16px;
+        display: flex;
+        gap: 8px;
+      }
+      .btn {
+        flex: 1;
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        border: none;
+      }
+      .btn-start {
+        background: #10b981;
+        color: white;
+      }
+      .btn-stop {
+        background: #ef4444;
+        color: white;
+      }
+      .btn-clear {
+        background: #f3f4f6;
+        color: #374151;
+        flex: 0.4;
+        font-size: 12px;
+      }
+      .hint {
+        padding: 0 16px 8px;
+        font-size: 11px;
+        color: #9ca3af;
+      }
+      .sessions-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 16px 4px;
+        border-top: 1px solid #f0f0f0;
+      }
+      .sessions-label {
+        font-size: 11px;
+        color: #9ca3af;
+        font-weight: 500;
+      }
+      .sessions-count {
+        background: #f0fdf4;
+        color: #10b981;
+        font-size: 11px;
+        padding: 1px 8px;
+        border-radius: 10px;
+        font-weight: 600;
+      }
+      .sessions-list {
+        max-height: 200px;
+        overflow-y: auto;
+        padding: 4px 16px 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .session-item {
+        background: #f9fafb;
+        border-radius: 8px;
+        padding: 8px 10px;
+      }
+      .session-header {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 2px;
+      }
+      .session-num {
+        font-size: 12px;
+        font-weight: 600;
+        color: #374151;
+      }
+      .session-time {
+        font-size: 11px;
+        color: #9ca3af;
+      }
+      .session-del {
+        margin-left: auto;
+        font-size: 11px;
+        color: #9ca3af;
+        cursor: pointer;
+        background: none;
+        border: none;
+        padding: 0;
+      }
+      .session-del:hover {
+        color: #ef4444;
+      }
+      .session-steps {
+        font-size: 11px;
+        color: #6b7280;
+      }
+      .empty {
+        text-align: center;
+        padding: 20px 16px;
+        color: #9ca3af;
+        font-size: 12px;
+        line-height: 1.6;
+      }
+      .send-section {
+        padding: 10px 16px 14px;
+        border-top: 1px solid #f0f0f0;
+      }
+      .send-btn {
+        width: 100%;
+        padding: 9px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        border: none;
+        background: #111;
+        color: white;
+      }
+      .send-btn:disabled {
+        background: #e5e7eb;
+        color: #9ca3af;
+        cursor: not-allowed;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <div class="logo">QA</div>
+      <span class="title">QAForge Recorder</span>
+      <span class="badge idle" id="badge">Idle</span>
+    </div>
+    <div class="url-display" id="urlDisplay">—</div>
+    <div class="status-bar">
+      <div class="dot" id="dot"></div>
+      <span id="statusText">Siap merekam</span>
+      <span class="current-count" id="currentCount"></span>
+    </div>
+    <div class="controls">
+      <button class="btn btn-start" id="startBtn">Start</button>
+      <button class="btn btn-stop" id="stopBtn" style="display: none">
+        Stop
+      </button>
+      <button class="btn btn-clear" id="clearBtn">Reset</button>
+    </div>
+    <div class="hint">
+      Start → Stop = 1 test case. Ulangi untuk test case berikutnya.
+    </div>
+    <div class="sessions-header">
+      <span class="sessions-label">Test case terekam</span>
+      <span class="sessions-count" id="totalSessions">0</span>
+    </div>
+    <div class="sessions-list" id="sessionsList">
+      <div class="empty">
+        Belum ada test case.<br />Start - Stop untuk merekam 1 test case.
+      </div>
+    </div>
+    <div class="send-section">
+      <button class="send-btn" id="sendBtn" disabled>
+        Kirim ke QAForge App
+      </button>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>
