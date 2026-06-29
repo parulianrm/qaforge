@@ -1,16 +1,28 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
-  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
   Plus,
   Upload,
   Download,
   Pencil,
   Trash2,
   Check,
+  ClipboardList,
   X,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import {
+  TEST_CASE_PRIORITIES,
+  TEST_CASE_STATUSES,
+  labelize,
+  normalizeTestCasePriority,
+  normalizeTestCaseStatus,
+} from "../lib/domain";
+import { formatTestCaseCode } from "../lib/testCaseCode";
+import { getUserDisplayName } from "../lib/userProfile";
+import { useAuth } from "../hooks/useAuth";
 import { TestCase, Project } from "../types";
 import * as XLSX from "xlsx";
 
@@ -28,22 +40,78 @@ const STATUS_COLORS: Record<string, string> = {
   not_run: "bg-gray-100 text-gray-400",
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  pass: "Pass",
-  fail: "Fail",
-  skip: "Skip",
-  not_run: "Not Run",
+const PAGE_SIZE = 10;
+type TestCaseForm = {
+  tc_id: string;
+  module: string;
+  title: string;
+  precondition: string;
+  steps: string;
+  expected_result: string;
+  actual_result: string;
+  priority: string;
+  status: string;
+  tester: string;
 };
+type TestCaseExcelRow = Record<string, string | number | undefined>;
+
+function cellText(value: string | number | undefined) {
+  return value == null ? "" : String(value);
+}
+
+function PaginationControls({
+  page,
+  total,
+  onPageChange,
+}: {
+  page: number;
+  total: number;
+  onPageChange: (page: number) => void;
+}) {
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if (totalPages <= 1) return null;
+
+  return (
+    <div className="flex items-center justify-between border-t border-gray-100 px-4 py-3 text-xs text-gray-500">
+      <span>
+        Page {page} of {totalPages}
+      </span>
+      <div className="flex gap-2">
+        <button
+          onClick={() => onPageChange(Math.max(1, page - 1))}
+          disabled={page === 1}
+          className="rounded-md border border-gray-200 p-1.5 text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+          title="Previous page"
+        >
+          <ChevronLeft size={16} />
+        </button>
+        <button
+          onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+          disabled={page === totalPages}
+          className="rounded-md border border-gray-200 p-1.5 text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+          title="Next page"
+        >
+          <ChevronRight size={16} />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function TestCasePage() {
   const { projectId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const defaultTester = getUserDisplayName(user);
+
   const [project, setProject] = useState<Project | null>(null);
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<TestCaseForm>({
     tc_id: "",
     module: "",
     title: "",
@@ -58,10 +126,45 @@ export default function TestCasePage() {
 
   useEffect(() => {
     if (projectId) {
+      setPage(1);
+      setSearch("");
       fetchProject();
       fetchTestCases();
     }
   }, [projectId]);
+
+  const filteredTestCases = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+    if (!keyword) return testCases;
+    return testCases.filter((tc) =>
+      [
+        tc.tc_id,
+        tc.test_case_code,
+        tc.module,
+        tc.title,
+        tc.precondition,
+        tc.steps,
+        tc.expected_result,
+        tc.actual_result,
+        tc.priority,
+        tc.status,
+        tc.tester,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(keyword),
+    );
+  }, [search, testCases]);
+
+  const paginatedTestCases = useMemo(
+    () => filteredTestCases.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filteredTestCases, page],
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
 
   async function fetchProject() {
     const { data } = await supabase
@@ -94,15 +197,15 @@ export default function TestCasePage() {
       actual_result: "",
       priority: "medium",
       status: "not_run",
-      tester: "",
+      tester: defaultTester,
     });
     setEditingId(null);
   }
 
   function openCreate() {
     resetForm();
-    const nextId = `TC-${String(testCases.length + 1).padStart(3, "0")}`;
-    setForm((f) => ({ ...f, tc_id: nextId }));
+    const nextId = formatTestCaseCode(project?.name, testCases.length + 1);
+    setForm((f) => ({ ...f, tc_id: nextId, tester: f.tester || defaultTester }));
     setShowModal(true);
   }
 
@@ -128,21 +231,54 @@ export default function TestCasePage() {
     if (editingId) {
       await supabase
         .from("test_cases")
-        .update({ ...form })
+        .update({
+          ...form,
+          priority: normalizeTestCasePriority(form.priority),
+          status: normalizeTestCaseStatus(form.status),
+        })
         .eq("id", editingId);
     } else {
       await supabase
         .from("test_cases")
-        .insert({ ...form, project_id: projectId });
+        .insert({
+          ...form,
+          priority: normalizeTestCasePriority(form.priority),
+          status: normalizeTestCaseStatus(form.status),
+          project_id: projectId,
+        });
     }
     setShowModal(false);
     resetForm();
     fetchTestCases();
   }
 
+  async function resequenceTestCaseIds() {
+    const { data, error } = await supabase
+      .from("test_cases")
+      .select("id")
+      .eq("project_id", projectId)
+      .order("created_at", { ascending: true });
+
+    if (error || !data) return;
+
+    await Promise.all(
+      data.map((tc, index) =>
+        supabase
+          .from("test_cases")
+          .update({
+            tc_id: formatTestCaseCode(project?.name, index + 1),
+          })
+          .eq("id", tc.id),
+      ),
+    );
+  }
+
   async function deleteTestCase(id: string) {
     if (!confirm("Hapus test case ini?")) return;
-    await supabase.from("test_cases").delete().eq("id", id);
+    const { error } = await supabase.from("test_cases").delete().eq("id", id);
+    if (!error) {
+      await resequenceTestCaseIds();
+    }
     fetchTestCases();
   }
 
@@ -154,7 +290,7 @@ export default function TestCasePage() {
   function downloadTemplate() {
     const template = [
       {
-        "TC ID": "TC-001",
+        "TC ID": formatTestCaseCode(project?.name, 1),
         Module: "Login",
         Title: "Login dengan kredensial valid",
         Precondition: "User sudah terdaftar",
@@ -170,7 +306,7 @@ export default function TestCasePage() {
     const ws = XLSX.utils.json_to_sheet(template);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Test Cases");
-    XLSX.writeFile(wb, `template-testcase-${project?.name || "qaforge"}.xlsx`);
+    XLSX.writeFile(wb, `template-testcase-${project?.name || "havox"}.xlsx`);
   }
 
   function downloadTestCases() {
@@ -200,7 +336,6 @@ export default function TestCasePage() {
       { wch: 12 },
       { wch: 15 },
     ];
-
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Test Cases");
     XLSX.writeFile(wb, `testcase-${project?.name || "project"}.xlsx`);
@@ -213,19 +348,19 @@ export default function TestCasePage() {
     reader.onload = async (evt) => {
       const wb = XLSX.read(evt.target?.result, { type: "binary" });
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws) as any[];
+      const rows = XLSX.utils.sheet_to_json(ws) as TestCaseExcelRow[];
       const inserts = rows.map((row, i) => ({
         project_id: projectId,
-        tc_id: row["TC ID"] || `TC-${String(i + 1).padStart(3, "0")}`,
-        module: row["Module"] || "",
-        title: row["Title"] || "",
-        precondition: row["Precondition"] || "",
-        steps: row["Steps"] || "",
-        expected_result: row["Expected Result"] || "",
-        actual_result: row["Actual Result"] || "",
-        priority: row["Priority"] || "medium",
-        status: row["Status"] || "not_run",
-        tester: row["Tester"] || "",
+        tc_id: cellText(row["TC ID"]) || formatTestCaseCode(project?.name, i + 1),
+        module: cellText(row["Module"]),
+        title: cellText(row["Title"]),
+        precondition: cellText(row["Precondition"]),
+        steps: cellText(row["Steps"]),
+        expected_result: cellText(row["Expected Result"]),
+        actual_result: cellText(row["Actual Result"]),
+        priority: normalizeTestCasePriority(row["Priority"]),
+        status: normalizeTestCaseStatus(row["Status"]),
+        tester: cellText(row["Tester"]),
       }));
       await supabase.from("test_cases").insert(inserts);
       fetchTestCases();
@@ -240,27 +375,30 @@ export default function TestCasePage() {
         <button
           onClick={() => navigate("/projects")}
           className="text-gray-400 hover:text-gray-600"
+          title="Kembali ke project"
         >
-          <ArrowLeft size={18} />
+          <ChevronLeft size={18} />
         </button>
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+          <ClipboardList size={18} />
+        </div>
         <h1 className="text-xl font-semibold text-gray-900">{project?.name}</h1>
       </div>
-      <p className="text-sm text-gray-500 mb-6 ml-7">{project?.description}</p>
+      <p className="text-sm text-gray-500 mb-6 ml-16">{project?.description}</p>
 
-      <div className="flex gap-2 mb-5">
+      <div className="flex flex-wrap gap-2 mb-5">
         <button
           onClick={openCreate}
-          className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white text-sm font-medium rounded-lg hover:bg-emerald-600 cursor-pointer transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white text-sm font-medium rounded-lg hover:bg-emerald-600 transition-colors cursor-pointer"
         >
           <Plus size={15} /> Tambah Test Case
         </button>
         <button
           onClick={downloadTemplate}
-          className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-sm text-gray-600 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+          className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-sm text-gray-600 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
         >
           <Download size={15} /> Unduh Template
         </button>
-
         <label className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-sm text-gray-600 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
           <Upload size={15} /> Upload Excel
           <input
@@ -273,10 +411,17 @@ export default function TestCasePage() {
         <button
           onClick={downloadTestCases}
           disabled={testCases.length === 0}
-          className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-sm text-gray-600 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-sm text-gray-600 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
         >
           <Download size={15} /> Download Test Cases
         </button>
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Cari TC ID, judul, module, status..."
+          className="min-w-72 flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
+        />
       </div>
 
       <div className="grid grid-cols-4 gap-3 mb-5">
@@ -317,6 +462,10 @@ export default function TestCasePage() {
           <div className="text-center py-16 text-gray-400 text-sm">
             Belum ada test case. Tambah manual atau upload Excel.
           </div>
+        ) : filteredTestCases.length === 0 ? (
+          <div className="text-center py-16 text-gray-400 text-sm">
+            Tidak ada test case yang cocok dengan pencarian.
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -332,7 +481,7 @@ export default function TestCasePage() {
                     Judul
                   </th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">
-                    Cucumber Scenario
+                    Expected Result
                   </th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 w-24">
                     Priority
@@ -347,7 +496,7 @@ export default function TestCasePage() {
                 </tr>
               </thead>
               <tbody>
-                {testCases.map((tc, i) => (
+                {paginatedTestCases.map((tc, i) => (
                   <tr
                     key={tc.id}
                     className={`border-b border-gray-50 hover:bg-gray-50 transition-colors ${
@@ -361,7 +510,7 @@ export default function TestCasePage() {
                     <td className="px-4 py-3 text-gray-900 font-medium">
                       {tc.title}
                     </td>
-                    <td className="px-4 py-3 text-gray-900 font-medium whitespace-pre-line">
+                    <td className="px-4 py-3 text-gray-900 font-medium">
                       {tc.expected_result}
                     </td>
                     <td className="px-4 py-3">
@@ -381,9 +530,9 @@ export default function TestCasePage() {
                           STATUS_COLORS[tc.status]
                         }`}
                       >
-                        {Object.entries(STATUS_LABELS).map(([val, label]) => (
-                          <option key={val} value={val}>
-                            {label}
+                        {TEST_CASE_STATUSES.map((status) => (
+                          <option key={status} value={status}>
+                            {labelize(status)}
                           </option>
                         ))}
                       </select>
@@ -411,6 +560,11 @@ export default function TestCasePage() {
                 ))}
               </tbody>
             </table>
+            <PaginationControls
+              page={page}
+              total={filteredTestCases.length}
+              onPageChange={setPage}
+            />
           </div>
         )}
       </div>
@@ -434,7 +588,11 @@ export default function TestCasePage() {
             </div>
             <div className="p-6 grid grid-cols-2 gap-4">
               {[
-                { label: "TC ID", key: "tc_id", placeholder: "TC-001" },
+                {
+                  label: "TC ID",
+                  key: "tc_id",
+                  placeholder: formatTestCaseCode(project?.name, 1),
+                },
                 { label: "Module", key: "module", placeholder: "Login" },
                 { label: "Tester", key: "tester", placeholder: "Nama tester" },
               ].map((f) => (
@@ -444,7 +602,7 @@ export default function TestCasePage() {
                   </label>
                   <input
                     type="text"
-                    value={(form as any)[f.key]}
+                    value={form[f.key as keyof TestCaseForm]}
                     onChange={(e) =>
                       setForm((p) => ({ ...p, [f.key]: e.target.value }))
                     }
@@ -464,10 +622,11 @@ export default function TestCasePage() {
                   }
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-emerald-400"
                 >
-                  <option value="critical">Critical</option>
-                  <option value="high">High</option>
-                  <option value="medium">Medium</option>
-                  <option value="low">Low</option>
+                  {TEST_CASE_PRIORITIES.map((priority) => (
+                    <option key={priority} value={priority}>
+                      {labelize(priority)}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -481,10 +640,11 @@ export default function TestCasePage() {
                   }
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-emerald-400"
                 >
-                  <option value="not_run">Not Run</option>
-                  <option value="pass">Pass</option>
-                  <option value="fail">Fail</option>
-                  <option value="skip">Skip</option>
+                  {TEST_CASE_STATUSES.map((status) => (
+                    <option key={status} value={status}>
+                      {labelize(status)}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div className="col-span-2">
@@ -528,7 +688,7 @@ export default function TestCasePage() {
                     {f.label}
                   </label>
                   <textarea
-                    value={(form as any)[f.key]}
+                    value={form[f.key as keyof TestCaseForm]}
                     onChange={(e) =>
                       setForm((p) => ({ ...p, [f.key]: e.target.value }))
                     }
