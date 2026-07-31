@@ -1,4 +1,8 @@
 import {
+  lazy,
+  Suspense,
+} from "react";
+import {
   BrowserRouter,
   Routes,
   Route,
@@ -8,6 +12,7 @@ import {
 import {
   Bug,
   ClipboardList,
+  FileText,
   LayoutDashboard,
   LogOut,
   Radio,
@@ -23,6 +28,16 @@ import Recorder from "./pages/Recorder";
 import Dashboard from "./pages/Dashboard";
 import Defects from "./pages/Defects";
 
+const Templates = lazy(() => import("./pages/Templates"));
+
+function PageLoader() {
+  return (
+    <div className="flex min-h-[60vh] items-center justify-center">
+      <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+}
+
 function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, signOut } = useAuth();
   const location = useLocation();
@@ -31,6 +46,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/projects", label: "Test Cases", icon: ClipboardList },
     { href: "/defects", label: "Defects", icon: Bug },
+    { href: "/templates", label: "Templates", icon: FileText },
     { href: "/recorder", label: "Recorder", icon: Radio },
   ];
 
@@ -152,6 +168,16 @@ export default function App() {
           element={
             <PrivateRoute>
               <Defects />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/templates"
+          element={
+            <PrivateRoute>
+              <Suspense fallback={<PageLoader />}>
+                <Templates />
+              </Suspense>
             </PrivateRoute>
           }
         />

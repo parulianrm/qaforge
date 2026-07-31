@@ -47,20 +47,18 @@ export interface Defect {
   title: string;
   module?: string;
   description?: string;
-  priority?: DefectPriority | "critical" | "BLOCKER" | "HIGH" | "MEDIUM" | "LOW";
+  priority?:
+    DefectPriority | "critical" | "BLOCKER" | "HIGH" | "MEDIUM" | "LOW";
   attachment?: string;
   developer_notes?: string;
   merge_request?: string;
   qa_notes?: string;
   environment?: string;
   database_name?: string;
+  handled_by?: string;
+  updated_at?: string;
   severity:
-    | DefectPriority
-    | "critical"
-    | "CRITICAL"
-    | "MAJOR"
-    | "MINOR"
-    | "TRIVIAL";
+    DefectPriority | "critical" | "CRITICAL" | "MAJOR" | "MINOR" | "TRIVIAL";
   status:
     | DefectStatus
     | "resolved"
@@ -120,4 +118,16 @@ export interface RecordingSession {
   gherkin?: string;
   step_count?: number;
   created_at: string;
+}
+
+export interface DocumentTemplate {
+  id: string;
+  name: string;
+  document_type: "QAD" | string;
+  description?: string;
+  content_html: string;
+  is_default: boolean;
+  created_by?: string;
+  created_at: string;
+  updated_at?: string;
 }

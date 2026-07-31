@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, FolderOpen, Trash2, Pencil } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { useAuth } from "../hooks/useAuth";
 import { Project, TestCase } from "../types";
 
 interface ProjectSummary {
@@ -10,6 +11,7 @@ interface ProjectSummary {
 }
 
 export default function Projects() {
+  const { user } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [summaries, setSummaries] = useState<Record<string, ProjectSummary>>({});
   const [loading, setLoading] = useState(true);
@@ -99,13 +101,9 @@ export default function Projects() {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    const legacyResult = await supabase.from("projects").insert({
-      ...payload,
-      owner_id: user?.id,
-    });
-    if (!legacyResult.error) return legacyResult;
     return supabase.from("projects").insert({
       ...payload,
+      owner_id: user?.id,
       created_by: user?.id,
     });
   }
@@ -118,6 +116,10 @@ export default function Projects() {
       return;
     await supabase.from("projects").delete().eq("id", id);
     fetchProjects();
+  }
+
+  function isProjectOwner(project: Project) {
+    return project.owner_id === user?.id || project.created_by === user?.id;
   }
 
   return (
@@ -163,22 +165,24 @@ export default function Projects() {
                 <div className="w-9 h-9 bg-emerald-50 rounded-lg flex items-center justify-center">
                   <FolderOpen size={18} className="text-emerald-500" />
                 </div>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={(e) => openEdit(project, e)}
-                    className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-blue-500 transition-all"
-                    title="Edit project"
-                  >
-                    <Pencil size={14} />
-                  </button>
-                  <button
-                    onClick={(e) => deleteProject(project.id, e)}
-                    className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-red-500 transition-all"
-                    title="Hapus project"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
+                {isProjectOwner(project) && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={(e) => openEdit(project, e)}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-blue-500 transition-all"
+                      title="Edit project"
+                    >
+                      <Pencil size={14} />
+                    </button>
+                    <button
+                      onClick={(e) => deleteProject(project.id, e)}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-red-500 transition-all"
+                      title="Hapus project"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                )}
               </div>
               <h3 className="font-semibold text-gray-900 text-sm mb-1">
                 {project.name}

@@ -8,10 +8,27 @@ export const TEST_CASE_PRIORITIES = [
 
 export const DEFECT_STATUSES = [
   "open",
-  "in_progress",
+  "in_development",
+  "done_development",
+  "on_check",
   "solved",
-  "closed",
+  "gwind_issue",
+  "hold",
+  "re_open",
 ] as const;
+export const DEFECT_STATUS_LABELS: Record<
+  (typeof DEFECT_STATUSES)[number],
+  string
+> = {
+  open: "Open",
+  in_development: "In Development/Fixing",
+  done_development: "Done Development/Fixing",
+  on_check: "On Check",
+  solved: "Solved",
+  gwind_issue: "GWind Issue",
+  hold: "HOLD",
+  re_open: "RE - OPEN",
+};
 export const DEFECT_PRIORITIES = ["blocker", "high", "medium", "low"] as const;
 
 export type TestCaseStatus = (typeof TEST_CASE_STATUSES)[number];
@@ -54,12 +71,49 @@ export function normalizeTestCasePriority(
   return "medium";
 }
 
-export function normalizeDefectStatus(status?: string | number | null): DefectStatus {
-  const normalized = normalizeValue(status);
-  if (["in_progress", "retest"].includes(normalized)) return "in_progress";
-  if (["solved", "resolved", "fixed"].includes(normalized)) return "solved";
-  if (normalized === "closed") return "closed";
+export function normalizeDefectStatus(
+  status?: string | number | null,
+): DefectStatus {
+  const normalized = normalizeValue(status).replace(/\//g, "_");
+  if (["re_open", "reopen", "reopened"].includes(normalized)) return "re_open";
+  if (["hold", "on_hold", "paused"].includes(normalized)) return "hold";
+  if (["gwind_issue", "gwind"].includes(normalized)) return "gwind_issue";
+  if (
+    ["on_check", "checking", "qa_check", "review", "on_review"].includes(
+      normalized,
+    )
+  )
+    return "on_check";
+  if (
+    [
+      "done_development_fixing",
+      "done_development",
+      "development_done",
+      "done",
+      "ready_for_test",
+      "fixed_pending_test",
+    ].includes(normalized)
+  )
+    return "done_development";
+  if (
+    [
+      "in_development_fixing",
+      "in_development",
+      "in_progress",
+      "developing",
+      "fixing",
+      "development",
+      "retest",
+    ].includes(normalized)
+  )
+    return "in_development";
+  if (["solved", "resolved", "fixed", "closed"].includes(normalized))
+    return "solved";
   return "open";
+}
+
+export function labelizeDefectStatus(status?: string | number | null) {
+  return DEFECT_STATUS_LABELS[normalizeDefectStatus(status)];
 }
 
 export function normalizeDefectPriority(
@@ -68,7 +122,11 @@ export function normalizeDefectPriority(
   const normalized = normalizeValue(priority);
   if (normalized === "blocker" || normalized === "critical") return "blocker";
   if (normalized === "high" || normalized === "major") return "high";
-  if (normalized === "low" || normalized === "minor" || normalized === "trivial")
+  if (
+    normalized === "low" ||
+    normalized === "minor" ||
+    normalized === "trivial"
+  )
     return "low";
   return "medium";
 }

@@ -5,18 +5,32 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
+  Link2,
+  Paperclip,
   Pencil,
   Plus,
+  ShieldCheck,
   Trash2,
   Upload,
+  Users,
   X,
 } from "lucide-react";
 import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import { supabase } from "../lib/supabase";
+import {
+  ACCESS_ROLES,
+  AccessRole,
+  ProjectAccessGrant,
+  canEdit,
+  canManageAccess,
+  getLocalProjectRole,
+} from "../lib/access";
 import {
   DEFECT_PRIORITIES,
   DEFECT_STATUSES,
   labelize,
+  labelizeDefectStatus,
   normalizeDefectPriority,
   normalizeDefectStatus,
 } from "../lib/domain";
@@ -36,10 +50,25 @@ const PRIORITY_COLORS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  open: "bg-red-50 text-red-700",
-  in_progress: "bg-blue-50 text-blue-700",
-  solved: "bg-emerald-50 text-emerald-700",
-  closed: "bg-slate-100 text-slate-600",
+  open: "bg-slate-100 text-slate-700",
+  in_development: "bg-blue-100 text-blue-700",
+  done_development: "bg-indigo-100 text-indigo-700",
+  on_check: "bg-purple-100 text-purple-700",
+  solved: "bg-emerald-100 text-emerald-700",
+  gwind_issue: "bg-amber-100 text-amber-700",
+  hold: "bg-orange-100 text-orange-700",
+  re_open: "bg-red-100 text-red-700",
+};
+
+const STATUS_STAT_COLORS: Record<string, string> = {
+  open: "text-slate-600",
+  in_development: "text-blue-600",
+  done_development: "text-indigo-600",
+  on_check: "text-purple-600",
+  solved: "text-emerald-600",
+  gwind_issue: "text-amber-600",
+  hold: "text-orange-600",
+  re_open: "text-red-600",
 };
 
 function formatIssueId(projectName: string | undefined, sequence: number) {
@@ -97,6 +126,105 @@ function cellText(value: string | number | undefined) {
   return value == null ? "" : String(value);
 }
 
+function shortenId(id: string, keep = 8) {
+  return id.length > keep ? `${id.slice(0, keep)}…` : id;
+}
+
+function fileLabelFromUrl(value: string) {
+  try {
+    const url = new URL(value);
+    const segments = url.pathname.split("/").filter(Boolean);
+    const host = url.hostname.replace(/^www\./, "");
+    const last = segments[segments.length - 1];
+
+    if (last && /\.[a-z0-9]{2,5}$/i.test(last)) {
+      return decodeURIComponent(last);
+    }
+
+    if (host === "drive.google.com") {
+      const dIndex = segments.indexOf("d");
+      const id =
+        dIndex >= 0
+          ? segments[dIndex + 1]
+          : segments.find((s) => s.length > 20);
+      const kind = segments.includes("folders") ? "Drive Folder" : "Drive File";
+      return id ? `${kind} · ${shortenId(id)}` : kind;
+    }
+    if (host === "docs.google.com") {
+      if (segments.includes("spreadsheets")) return "Google Sheet";
+      if (segments.includes("presentation")) return "Google Slide";
+      if (segments.includes("forms")) return "Google Form";
+      return "Google Doc";
+    }
+
+    if (host === "github.com") {
+      const prIndex = segments.indexOf("pull");
+      if (prIndex > 0 && segments[prIndex + 1]) {
+        return `${segments[prIndex - 1]} #${segments[prIndex + 1]}`;
+      }
+    }
+    if (segments.includes("merge_requests")) {
+      const idx = segments.indexOf("merge_requests");
+      const num = segments[idx + 1];
+      const project =
+        segments[idx - 1] === "-" ? segments[idx - 2] : segments[idx - 1];
+      return num ? `${project ? project + " " : ""}!${num}` : "Merge Request";
+    }
+    const prKey = segments.includes("pull-requests")
+      ? "pull-requests"
+      : segments.includes("pullrequest")
+        ? "pullrequest"
+        : null;
+    if (prKey) {
+      const idx = segments.indexOf(prKey);
+      const num = segments[idx + 1];
+      const project = segments[idx - 1];
+      return num ? `${project ? project + " " : ""}#${num}` : "Pull Request";
+    }
+
+    if (segments.length) return segments.slice(-2).join("/");
+    return host;
+  } catch {
+    return value;
+  }
+}
+
+function LinkChip({
+  value,
+  icon,
+}: {
+  value?: string | null;
+  icon: React.ReactNode;
+}) {
+  if (!value) return <span className="text-gray-400">-</span>;
+  const isUrl = /^https?:\/\//i.test(value);
+  const label = isUrl ? fileLabelFromUrl(value) : value;
+  const chip = (
+    <span
+      className={`inline-flex max-w-full items-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs font-medium transition ${
+        isUrl
+          ? "border-gray-200 bg-gray-50 text-blue-700 hover:border-blue-200 hover:bg-blue-50"
+          : "border-gray-200 bg-gray-50 text-gray-700"
+      }`}
+    >
+      {icon}
+      <span className="truncate">{label}</span>
+    </span>
+  );
+  if (!isUrl) return chip;
+  return (
+    <a
+      href={value}
+      target="_blank"
+      rel="noreferrer"
+      title={value}
+      className="inline-flex max-w-full"
+    >
+      {chip}
+    </a>
+  );
+}
+
 const emptyForm = {
   project_id: "",
   module: "",
@@ -109,6 +237,7 @@ const emptyForm = {
   priority: "medium",
   attachment: "",
   status: "open",
+  handled_by: "",
   developer_notes: "",
   merge_request: "",
   qa_notes: "",
@@ -165,22 +294,40 @@ export default function DefectsPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
+  const [showAccessModal, setShowAccessModal] = useState(false);
+  const [accessGrants, setAccessGrants] = useState<ProjectAccessGrant[]>([]);
+  const [accessEmail, setAccessEmail] = useState("");
+  const [accessRole, setAccessRole] = useState<AccessRole>("viewer");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ ...emptyForm, reporter: defaultReporter });
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId),
     [projects, selectedProjectId],
   );
+  const projectRole = useMemo(
+    () => getLocalProjectRole(selectedProject || null, user, accessGrants),
+    [accessGrants, selectedProject, user],
+  );
+  const editable = canEdit(projectRole);
+  const manageable = canManageAccess(projectRole);
 
   useEffect(() => {
     fetchProjects();
   }, []);
 
   useEffect(() => {
+    if (!selectedProjectId) {
+      setDefects([]);
+      setLoading(false);
+      return;
+    }
     setPage(1);
     setSearch("");
     fetchDefects();
+    fetchAccessGrants();
   }, [selectedProjectId]);
 
   const filteredDefects = useMemo(() => {
@@ -221,10 +368,15 @@ export default function DefectsPage() {
   }, [search]);
 
   async function fetchProjects() {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("projects")
       .select("*")
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
+    if (error) {
+      console.error("Failed to fetch projects:", error.message);
+      return;
+    }
     const projectRows = data || [];
     setProjects(projectRows);
     if (!selectedProjectId && projectRows[0]) {
@@ -238,11 +390,56 @@ export default function DefectsPage() {
       .from("defects")
       .select("*")
       .order("reported_at", { ascending: false })
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
     if (selectedProjectId) query = query.eq("project_id", selectedProjectId);
-    const { data } = await query;
-    setDefects(data || []);
+    const { data, error } = await query;
+    if (error) {
+      console.error("Failed to fetch defects:", error.message);
+    } else {
+      setDefects(data || []);
+    }
     setLoading(false);
+  }
+
+  async function fetchAccessGrants() {
+    if (!selectedProjectId) {
+      setAccessGrants([]);
+      return;
+    }
+    const { data } = await supabase
+      .from("project_access")
+      .select("*")
+      .eq("project_id", selectedProjectId)
+      .order("created_at", { ascending: true });
+    setAccessGrants((data || []) as ProjectAccessGrant[]);
+  }
+
+  async function saveAccessGrant() {
+    if (!selectedProjectId || !accessEmail.trim()) return;
+    const email = accessEmail.trim().toLowerCase();
+    const {
+      data: { user: currentUser },
+    } = await supabase.auth.getUser();
+    const { error } = await supabase.from("project_access").upsert(
+      {
+        project_id: selectedProjectId,
+        user_email: email,
+        role: accessRole,
+        created_by: currentUser?.id,
+      },
+      { onConflict: "project_id,user_email" },
+    );
+    if (!error) {
+      setAccessEmail("");
+      setAccessRole("viewer");
+      fetchAccessGrants();
+    }
+  }
+
+  async function removeAccessGrant(id: string) {
+    await supabase.from("project_access").delete().eq("id", id);
+    fetchAccessGrants();
   }
 
   function resetForm() {
@@ -258,11 +455,15 @@ export default function DefectsPage() {
   }
 
   function openCreate() {
+    if (!editable) return;
     resetForm();
+    setSaveError(null);
     setShowModal(true);
   }
 
   function openEdit(defect: Defect) {
+    if (!editable) return;
+    setSaveError(null);
     setForm({
       project_id: defect.project_id,
       module: defect.module || "",
@@ -275,6 +476,7 @@ export default function DefectsPage() {
       priority: normalizeDefectPriority(defect.priority || defect.severity),
       attachment: defect.attachment || "",
       status: normalizeDefectStatus(defect.status),
+      handled_by: defect.handled_by || "",
       developer_notes: defect.developer_notes || "",
       merge_request: defect.merge_request || "",
       qa_notes: defect.qa_notes || "",
@@ -284,6 +486,7 @@ export default function DefectsPage() {
   }
 
   async function saveDefect() {
+    if (!editable) return;
     if (!form.project_id || !form.description.trim()) return;
     const payload = {
       project_id: form.project_id,
@@ -299,15 +502,21 @@ export default function DefectsPage() {
       severity: normalizeDefectPriority(form.priority),
       attachment: form.attachment,
       status: normalizeDefectStatus(form.status),
+      handled_by: form.handled_by,
       developer_notes: form.developer_notes,
       merge_request: form.merge_request,
       qa_notes: form.qa_notes,
     };
 
-    if (editingId) {
-      await supabase.from("defects").update(payload).eq("id", editingId);
-    } else {
-      await supabase.from("defects").insert(payload);
+    setSaving(true);
+    setSaveError(null);
+    const { error } = editingId
+      ? await supabase.from("defects").update(payload).eq("id", editingId)
+      : await supabase.from("defects").insert(payload);
+    setSaving(false);
+    if (error) {
+      setSaveError(error.message);
+      return;
     }
     setShowModal(false);
     resetForm();
@@ -315,80 +524,268 @@ export default function DefectsPage() {
   }
 
   async function deleteDefect(id: string) {
+    if (!editable) return;
     if (!confirm("Hapus defect ini?")) return;
     await supabase.from("defects").delete().eq("id", id);
     fetchDefects();
   }
 
-  function getExcelRows(rows: Defect[]) {
-    return rows.map((defect) => ({
-      "Reported By": defect.reporter || "",
-      "Reported At": formatDisplayDate(defect.reported_at || defect.created_at),
-      "Issue ID": defect.issue_id || defect.def_id || "",
-      Description: defect.description || defect.title || "",
-      Priority: labelize(defect.priority || defect.severity),
-      Attachment: defect.attachment || "",
-      Status: labelize(defect.status),
-      "Developer Notes": defect.developer_notes || "",
-      "Merge Request": defect.merge_request || "",
-      "QA Notes": defect.qa_notes || "",
-    }));
+  async function updateDefectStatus(id: string, status: string) {
+    if (!editable) return;
+    const normalized = normalizeDefectStatus(status);
+    setDefects((prev) =>
+      prev.map((defect) =>
+        defect.id === id ? { ...defect, status: normalized } : defect,
+      ),
+    );
+    const { error } = await supabase
+      .from("defects")
+      .update({ status: normalized })
+      .eq("id", id);
+    if (error) fetchDefects();
   }
 
-  function buildWorkbook(rows: Record<string, string>[]) {
-    const ws = XLSX.utils.aoa_to_sheet([
-      ["Modul Name", form.module || selectedProject?.name || ""],
-      ["Environment", form.environment || "Development"],
-      ["Database", form.database_name || ""],
-      [],
-    ]);
-    XLSX.utils.sheet_add_json(ws, rows, { origin: "A5" });
-    ws["!cols"] = [
-      { wch: 18 },
-      { wch: 14 },
-      { wch: 12 },
-      { wch: 58 },
-      { wch: 14 },
-      { wch: 28 },
-      { wch: 16 },
-      { wch: 34 },
-      { wch: 42 },
-      { wch: 42 },
-    ];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, selectedProject?.name || "Defects");
-    return wb;
-  }
+  const EXCEL_COLUMN_WIDTHS = [
+    { wch: 18 },
+    { wch: 14 },
+    { wch: 12 },
+    { wch: 58 },
+    { wch: 14 },
+    { wch: 28 },
+    { wch: 16 },
+    { wch: 34 },
+    { wch: 42 },
+    { wch: 42 },
+  ];
 
   function downloadTemplate() {
-    const rows = [
-      {
-        "Reported By": defaultReporter,
-        "Reported At": formatDisplayDate(new Date().toISOString()),
-        "Issue ID": formatIssueId(selectedProject?.name, 1),
-        Description: `${selectedProject?.name || "Module"} > Deskripsi defect`,
-        Priority: "High",
-        Attachment: "nama-attachment",
-        Status: "Open",
-        "Developer Notes": "",
-        "Merge Request": "",
-        "QA Notes": "",
-      },
-    ];
+    const ws = XLSX.utils.aoa_to_sheet([
+      [
+        "Reported By",
+        "Reported At",
+        "Issue ID",
+        "Description",
+        "Priority",
+        "Attachment",
+        "Status",
+        "Handled By",
+        "Developer Notes",
+        "QA Notes",
+        "Merge Request",
+      ],
+    ]);
+    ws["!cols"] = EXCEL_COLUMN_WIDTHS;
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, selectedProject?.name || "Defects");
     XLSX.writeFile(
-      buildWorkbook(rows),
+      wb,
       `template-defect-${selectedProject?.name || "havox"}.xlsx`,
     );
   }
 
-  function downloadDefects() {
-    XLSX.writeFile(
-      buildWorkbook(getExcelRows(defects)),
-      `defects-${selectedProject?.name || "havox"}.xlsx`,
-    );
+  const LABEL_FILL: ExcelJS.Fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FFD9EAD3" },
+  };
+  const LABEL_FONT: Partial<ExcelJS.Font> = {
+    bold: true,
+    color: { argb: "FF274E13" },
+  };
+  const THIN_BORDER: Partial<ExcelJS.Borders> = {
+    top: { style: "thin", color: { argb: "FFE0E0E0" } },
+    left: { style: "thin", color: { argb: "FFE0E0E0" } },
+    bottom: { style: "thin", color: { argb: "FFE0E0E0" } },
+    right: { style: "thin", color: { argb: "FFE0E0E0" } },
+  };
+  const PRIORITY_FILLS: Record<string, string> = {
+    blocker: "FFB7B7B7",
+    high: "FFF4CCCC",
+    medium: "FFFCE5CD",
+    low: "FFD9EAD3",
+  };
+  const STATUS_FILLS: Record<string, { bg: string; font: string }> = {
+    open: { bg: "FFF3F3F3", font: "FF000000" },
+    in_development: { bg: "FF3D85C6", font: "FFFFFFFF" },
+    done_development: { bg: "FFB7B7B7", font: "FF000000" },
+    on_check: { bg: "FFD9D2E9", font: "FF000000" },
+    solved: { bg: "FF38761D", font: "FFFFFFFF" },
+    gwind_issue: { bg: "FFF1C232", font: "FF000000" },
+    hold: { bg: "FFE06666", font: "FFFFFFFF" },
+    re_open: { bg: "FF990000", font: "FFFFFFFF" },
+  };
+  const DEFECT_HEADERS = [
+    "Reported By",
+    "Reported At",
+    "Issue ID",
+    "Description",
+    "Priority",
+    "Attachment",
+    "Status",
+    "Handled By",
+    "Updated At",
+    "Developer Notes",
+    "QA Notes",
+    "Link Merge Request",
+  ];
+  const DEFECT_COL_WIDTHS = [20, 14, 12, 58, 14, 30, 24, 18, 14, 34, 34, 42];
+  const DEFECT_HEADER_ROW = 8;
+  const DEFECT_NOTES = [
+    "Mohon untuk melengkapi seluruh field yang sudah disediakan",
+    "Isi Bagian Reported By dengan alamat email, lalu klik convert to Smart Chips dan pilih People",
+    "Mohon untuk selalu melakukan update terkait issue yang telah diberikan oleh Reporter",
+    "Bila ada yang perlu dikonfirmasi terkait issue yang ditemukan, mohon segera menghubungi Reporter",
+  ];
+
+  async function downloadDefects() {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet(selectedProject?.name || "Defects", {
+      views: [{ state: "frozen", ySplit: DEFECT_HEADER_ROW }],
+    });
+    DEFECT_COL_WIDTHS.forEach((width, index) => {
+      sheet.getColumn(index + 1).width = width;
+    });
+
+    function setLabelCell(cellRef: string, value: string | number) {
+      const cell = sheet.getCell(cellRef);
+      cell.value = value;
+      cell.fill = LABEL_FILL;
+      cell.font = LABEL_FONT;
+    }
+
+    setLabelCell("A2", "Modul Name");
+    sheet.getCell("B2").value = form.module || selectedProject?.name || "";
+    setLabelCell("A3", "Environment");
+    sheet.getCell("B3").value = form.environment || "Development";
+    setLabelCell("A4", "Database");
+    sheet.getCell("B4").value = form.database_name || "";
+    setLabelCell("A5", "Test Case");
+    sheet.getCell("B5").value = "-";
+    setLabelCell("A6", "Total Defect");
+    sheet.getCell("B6").value = defects.length;
+    sheet.getCell("C6").value = "Defect";
+
+    const countFor = (status: string) =>
+      defects.filter((d) => normalizeDefectStatus(d.status) === status).length;
+    const summaryRows: Array<[number, string, number]> = [
+      [2, "Defect Open", countFor("open")],
+      [3, "Defect In Development/Fixing", countFor("in_development")],
+      [4, "Defect Done Development", countFor("done_development")],
+      [5, "Defect Re - Open", countFor("re_open")],
+      [6, "Defect Solved", countFor("solved")],
+    ];
+    summaryRows.forEach(([row, label, count]) => {
+      setLabelCell(`E${row}`, label);
+      sheet.getCell(`F${row}`).value = count;
+    });
+
+    setLabelCell("H2", "Catatan:");
+    DEFECT_NOTES.forEach((note, index) => {
+      const row = index + 3;
+      sheet.mergeCells(`H${row}:L${row}`);
+      const cell = sheet.getCell(`H${row}`);
+      cell.value = `${index + 1}. ${note}`;
+      cell.alignment = { wrapText: true, vertical: "top" };
+    });
+
+    const headerRow = sheet.getRow(DEFECT_HEADER_ROW);
+    DEFECT_HEADERS.forEach((text, index) => {
+      const cell = headerRow.getCell(index + 1);
+      cell.value = text;
+      cell.fill = LABEL_FILL;
+      cell.font = LABEL_FONT;
+      cell.alignment = { vertical: "middle" };
+      cell.border = THIN_BORDER;
+    });
+    headerRow.commit();
+
+    defects.forEach((defect, index) => {
+      const row = sheet.getRow(DEFECT_HEADER_ROW + 1 + index);
+      const priorityKey = normalizeDefectPriority(
+        defect.priority || defect.severity,
+      );
+      const statusKey = normalizeDefectStatus(defect.status);
+
+      row.getCell(1).value = defect.reporter || "";
+      row.getCell(2).value = formatDisplayDate(
+        defect.reported_at || defect.created_at,
+      );
+      row.getCell(3).value = defect.issue_id || defect.def_id || "";
+      row.getCell(4).value = defect.description || defect.title || "";
+      row.getCell(4).alignment = { wrapText: true, vertical: "top" };
+
+      const priorityCell = row.getCell(5);
+      priorityCell.value = labelize(defect.priority || defect.severity);
+      priorityCell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: PRIORITY_FILLS[priorityKey] || "FFFFFFFF" },
+      };
+      priorityCell.alignment = { horizontal: "center" };
+
+      const attachmentCell = row.getCell(6);
+      if (defect.attachment && /^https?:\/\//i.test(defect.attachment)) {
+        attachmentCell.value = {
+          text: fileLabelFromUrl(defect.attachment),
+          hyperlink: defect.attachment,
+        };
+        attachmentCell.font = { color: { argb: "FF1155CC" }, underline: true };
+      } else {
+        attachmentCell.value = defect.attachment || "";
+      }
+
+      const statusCell = row.getCell(7);
+      statusCell.value = labelizeDefectStatus(defect.status);
+      const statusStyle = STATUS_FILLS[statusKey] || {
+        bg: "FFFFFFFF",
+        font: "FF000000",
+      };
+      statusCell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: statusStyle.bg },
+      };
+      statusCell.font = { color: { argb: statusStyle.font }, bold: true };
+      statusCell.alignment = { horizontal: "center" };
+
+      row.getCell(8).value = defect.handled_by || "";
+      row.getCell(9).value = formatDisplayDate(defect.updated_at);
+      row.getCell(10).value = defect.developer_notes || "";
+      row.getCell(10).alignment = { wrapText: true, vertical: "top" };
+      row.getCell(11).value = defect.qa_notes || "";
+      row.getCell(11).alignment = { wrapText: true, vertical: "top" };
+
+      const mrCell = row.getCell(12);
+      if (defect.merge_request && /^https?:\/\//i.test(defect.merge_request)) {
+        mrCell.value = {
+          text: fileLabelFromUrl(defect.merge_request),
+          hyperlink: defect.merge_request,
+        };
+        mrCell.font = { color: { argb: "FF1155CC" }, underline: true };
+      } else {
+        mrCell.value = defect.merge_request || "";
+      }
+
+      for (let col = 1; col <= DEFECT_HEADERS.length; col += 1) {
+        row.getCell(col).border = THIN_BORDER;
+      }
+      row.commit();
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `defects-${selectedProject?.name || "havox"}.xlsx`;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   function uploadExcel(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!editable) return;
     const file = e.target.files?.[0];
     if (!file || !selectedProjectId) return;
     const reader = new FileReader();
@@ -398,11 +795,19 @@ export default function DefectsPage() {
       const meta = XLSX.utils.sheet_to_json(ws, {
         header: 1,
       }) as (string | number | undefined)[][];
-      const moduleName = meta[0]?.[1] || selectedProject?.name || "";
-      const environment = meta[1]?.[1] || "Development";
-      const databaseName = meta[2]?.[1] || "";
+      const hasMetaRows =
+        String(meta[0]?.[0] || "")
+          .trim()
+          .toLowerCase() === "modul name";
+      const moduleName = hasMetaRows
+        ? meta[0]?.[1] || selectedProject?.name || ""
+        : selectedProject?.name || "";
+      const environment = hasMetaRows
+        ? meta[1]?.[1] || "Development"
+        : "Development";
+      const databaseName = hasMetaRows ? meta[2]?.[1] || "" : "";
       const rows = XLSX.utils.sheet_to_json(ws, {
-        range: 4,
+        range: hasMetaRows ? 4 : 0,
       }) as DefectExcelRow[];
       const inserts = rows
         .filter((row) => row["Description"] || row["Issue ID"])
@@ -426,9 +831,12 @@ export default function DefectsPage() {
             severity: priority,
             attachment: cellText(row["Attachment"]),
             status: normalizeDefectStatus(row["Status"]),
+            handled_by: cellText(row["Handled By"]),
             developer_notes: cellText(row["Developer Notes"]),
-            merge_request: cellText(row["Merge Request"]),
             qa_notes: cellText(row["QA Notes"]),
+            merge_request: cellText(
+              row["Merge Request"] ?? row["Link Merge Request"],
+            ),
           };
         });
       if (inserts.length > 0) {
@@ -440,15 +848,11 @@ export default function DefectsPage() {
     e.target.value = "";
   }
 
-  const totalOpen = defects.filter((d) =>
-    ["open", "in_progress"].includes(normalizeDefectStatus(d.status)),
-  ).length;
-  const totalSolved = defects.filter((d) =>
-    ["solved", "closed"].includes(normalizeDefectStatus(d.status)),
-  ).length;
-  const totalBlocker = defects.filter(
-    (d) => normalizeDefectPriority(d.priority || d.severity) === "blocker",
-  ).length;
+  const statusCounts = DEFECT_STATUSES.map((status) => ({
+    status,
+    count: defects.filter((d) => normalizeDefectStatus(d.status) === status)
+      .length,
+  }));
 
   return (
     <div className="p-8">
@@ -489,8 +893,8 @@ export default function DefectsPage() {
       <div className="mb-5 flex flex-wrap gap-2">
         <button
           onClick={openCreate}
-          disabled={!selectedProjectId}
-          className="flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-600 disabled:opacity-50"
+          disabled={!selectedProjectId || !editable}
+          className="flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Plus size={15} /> Tambah Defect
         </button>
@@ -507,6 +911,7 @@ export default function DefectsPage() {
             type="file"
             accept=".xlsx,.xls"
             onChange={uploadExcel}
+            disabled={!editable}
             className="hidden"
           />
         </label>
@@ -524,26 +929,44 @@ export default function DefectsPage() {
           placeholder="Cari issue ID, deskripsi, reporter, status..."
           className="min-w-72 flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
         />
+        <button
+          onClick={() => setShowAccessModal(true)}
+          disabled={!manageable}
+          className="flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+          title={
+            manageable
+              ? "Kelola akses dokumen"
+              : "Hanya owner yang dapat mengelola akses"
+          }
+        >
+          <Users size={15} /> Access
+        </button>
       </div>
 
-      <div className="mb-5 grid grid-cols-1 gap-3 md:grid-cols-4">
-        {[
-          { label: "Total", value: defects.length, color: "text-gray-900" },
-          { label: "Open", value: totalOpen, color: "text-red-500" },
-          {
-            label: "Solved/Closed",
-            value: totalSolved,
-            color: "text-emerald-600",
-          },
-          { label: "Blocker", value: totalBlocker, color: "text-slate-700" },
-        ].map((item) => (
+      <div className="mb-5 flex items-center gap-2 rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs text-emerald-800">
+        <ShieldCheck size={15} />
+        Akses Anda: {projectRole ? labelize(projectRole) : "No Access"}
+      </div>
+
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <p className="text-xs text-gray-500">Total</p>
+          <p className="mt-1 text-2xl font-semibold text-gray-900">
+            {defects.length}
+          </p>
+        </div>
+        {statusCounts.map(({ status, count }) => (
           <div
-            key={item.label}
+            key={status}
             className="rounded-xl border border-gray-200 bg-white p-4"
           >
-            <p className="text-xs text-gray-500">{item.label}</p>
-            <p className={`mt-1 text-2xl font-semibold ${item.color}`}>
-              {item.value}
+            <p className="text-xs text-gray-500">
+              {labelizeDefectStatus(status)}
+            </p>
+            <p
+              className={`mt-1 text-2xl font-semibold ${STATUS_STAT_COLORS[status] || "text-gray-900"}`}
+            >
+              {count}
             </p>
           </div>
         ))}
@@ -564,7 +987,22 @@ export default function DefectsPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1200px] text-sm">
+            <table className="w-full min-w-330 table-fixed text-sm">
+              <colgroup>
+                <col className="w-27.5" />
+                <col className="w-25" />
+                <col className="w-22.5" />
+                <col className="w-65" />
+                <col className="w-22.5" />
+                <col className="w-35" />
+                <col className="w-25" />
+                <col className="w-27.5" />
+                <col className="w-25" />
+                <col className="w-42.5" />
+                <col className="w-42.5" />
+                <col className="w-42.5" />
+                <col className="w-17.5" />
+              </colgroup>
               <thead>
                 <tr className="border-b border-gray-100 bg-green-100">
                   {[
@@ -575,14 +1013,16 @@ export default function DefectsPage() {
                     "Priority",
                     "Attachment",
                     "Status",
+                    "Handled By",
+                    "Updated At",
                     "Developer Notes",
-                    "Merge Request",
                     "QA Notes",
+                    "Merge Request",
                     "",
                   ].map((header) => (
                     <th
                       key={header}
-                      className="px-3 py-3 text-left text-xs font-semibold text-green-900"
+                      className="whitespace-nowrap px-3 py-3 text-left text-xs font-semibold text-green-900"
                     >
                       {header}
                     </th>
@@ -593,57 +1033,91 @@ export default function DefectsPage() {
                 {paginatedDefects.map((defect) => (
                   <tr
                     key={defect.id}
-                    className="border-b border-gray-100 hover:bg-gray-50"
+                    className="border-b border-gray-100 align-top hover:bg-gray-50"
                   >
-                    <td className="px-3 py-3">{defect.reporter || "-"}</td>
-                    <td className="px-3 py-3">
+                    <td className="whitespace-pre-wrap wrap-break-word px-3 py-3">
+                      {defect.reporter || "-"}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-3">
                       {formatDisplayDate(
                         defect.reported_at || defect.created_at,
                       )}
                     </td>
-                    <td className="px-3 py-3 font-mono text-xs text-gray-500">
+                    <td className="whitespace-pre-wrap wrap-break-word px-3 py-3 font-mono text-xs text-gray-500">
                       {defect.issue_id || defect.def_id || "-"}
                     </td>
-                    <td className="max-w-md px-3 py-3 font-medium text-gray-900">
+                    <td className="whitespace-pre-wrap wrap-break-word px-3 py-3 font-medium text-gray-900">
                       {defect.description || defect.title}
                     </td>
                     <td className="px-3 py-3">
                       <span
-                        className={`rounded-full px-2 py-1 text-xs font-semibold ${PRIORITY_COLORS[normalizeDefectPriority(defect.priority || defect.severity)] || "bg-gray-100 text-gray-600"}`}
+                        className={`inline-block whitespace-nowrap rounded-full px-2 py-1 text-xs font-semibold ${PRIORITY_COLORS[normalizeDefectPriority(defect.priority || defect.severity)] || "bg-gray-100 text-gray-600"}`}
                       >
                         {labelize(defect.priority || defect.severity)}
                       </span>
                     </td>
-                    <td className="px-3 py-3 text-gray-600">
-                      {defect.attachment || "-"}
+                    <td className="px-3 py-3">
+                      <LinkChip
+                        value={defect.attachment}
+                        icon={
+                          <Paperclip
+                            size={12}
+                            className="shrink-0 text-gray-400"
+                          />
+                        }
+                      />
                     </td>
                     <td className="px-3 py-3">
-                      <span
-                        className={`rounded-full px-2 py-1 text-xs font-semibold ${STATUS_COLORS[normalizeDefectStatus(defect.status)] || "bg-gray-100 text-gray-600"}`}
+                      <select
+                        value={normalizeDefectStatus(defect.status)}
+                        onChange={(e) =>
+                          updateDefectStatus(defect.id, e.target.value)
+                        }
+                        disabled={!editable}
+                        className={`w-full cursor-pointer rounded-full border-0 px-2 py-1 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-400 disabled:cursor-not-allowed ${STATUS_COLORS[normalizeDefectStatus(defect.status)] || "bg-gray-100 text-gray-600"}`}
                       >
-                        {labelize(defect.status)}
-                      </span>
+                        {STATUS_OPTIONS.map((status) => (
+                          <option key={status} value={status}>
+                            {labelizeDefectStatus(status)}
+                          </option>
+                        ))}
+                      </select>
                     </td>
-                    <td className="px-3 py-3 text-gray-600">
+                    <td className="whitespace-pre-wrap wrap-break-word px-3 py-3 text-gray-600">
+                      {defect.handled_by || "-"}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-3 text-gray-500">
+                      {formatDisplayDate(defect.updated_at)}
+                    </td>
+                    <td className="whitespace-pre-wrap wrap-break-word px-3 py-3 text-gray-600">
                       {defect.developer_notes || "-"}
                     </td>
-                    <td className="max-w-xs px-3 py-3 text-blue-600">
-                      {defect.merge_request || "-"}
-                    </td>
-                    <td className="max-w-xs px-3 py-3 text-gray-600">
+                    <td className="whitespace-pre-wrap wrap-break-word px-3 py-3 text-gray-600">
                       {defect.qa_notes || "-"}
+                    </td>
+                    <td className="px-3 py-3">
+                      <LinkChip
+                        value={defect.merge_request}
+                        icon={
+                          <Link2 size={12} className="shrink-0 text-gray-400" />
+                        }
+                      />
                     </td>
                     <td className="px-3 py-3">
                       <div className="flex gap-1">
                         <button
                           onClick={() => openEdit(defect)}
-                          className="p-1.5 text-gray-400 hover:text-blue-500"
+                          disabled={!editable}
+                          className="p-1.5 text-gray-400 hover:text-blue-500 disabled:cursor-not-allowed disabled:opacity-30"
+                          title="Edit defect"
                         >
                           <Pencil size={13} />
                         </button>
                         <button
                           onClick={() => deleteDefect(defect.id)}
-                          className="p-1.5 text-gray-400 hover:text-red-500"
+                          disabled={!editable}
+                          className="p-1.5 text-gray-400 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-30"
+                          title="Hapus defect"
                         >
                           <Trash2 size={13} />
                         </button>
@@ -672,6 +1146,7 @@ export default function DefectsPage() {
               <button
                 onClick={() => {
                   setShowModal(false);
+                  setSaveError(null);
                   resetForm();
                 }}
                 className="text-gray-400 hover:text-gray-600"
@@ -711,6 +1186,7 @@ export default function DefectsPage() {
                 ],
                 ["Attachment", "attachment", "failed-upload-file"],
                 ["Merge Request", "merge_request", "https://..."],
+                ["Handled By", "handled_by", "Nama developer/PIC"],
               ].map(([label, key, placeholder]) => (
                 <div key={key}>
                   <label className="mb-1 block text-xs font-medium text-gray-600">
@@ -758,7 +1234,7 @@ export default function DefectsPage() {
                 >
                   {STATUS_OPTIONS.map((status) => (
                     <option key={status} value={status}>
-                      {labelize(status)}
+                      {labelizeDefectStatus(status)}
                     </option>
                   ))}
                 </select>
@@ -784,10 +1260,16 @@ export default function DefectsPage() {
                 </div>
               ))}
             </div>
+            {saveError && (
+              <div className="mx-6 mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                Gagal menyimpan defect: {saveError}
+              </div>
+            )}
             <div className="flex gap-2 px-6 pb-6">
               <button
                 onClick={() => {
                   setShowModal(false);
+                  setSaveError(null);
                   resetForm();
                 }}
                 className="flex-1 rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
@@ -796,12 +1278,99 @@ export default function DefectsPage() {
               </button>
               <button
                 onClick={saveDefect}
-                disabled={!form.project_id || !form.description.trim()}
+                disabled={
+                  !form.project_id || !form.description.trim() || saving
+                }
                 className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
               >
                 <Check size={15} />
-                {editingId ? "Simpan Perubahan" : "Tambah Defect"}
+                {saving
+                  ? "Menyimpan..."
+                  : editingId
+                    ? "Simpan Perubahan"
+                    : "Tambah Defect"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAccessModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+              <div className="flex items-center gap-2">
+                <Users size={18} className="text-emerald-600" />
+                <h2 className="font-semibold text-gray-900">Kelola Access</h2>
+              </div>
+              <button
+                onClick={() => setShowAccessModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="space-y-4 p-6">
+              <div className="grid grid-cols-[1fr_120px_auto] gap-2">
+                <input
+                  type="email"
+                  value={accessEmail}
+                  onChange={(e) => setAccessEmail(e.target.value)}
+                  placeholder="user@company.com"
+                  className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
+                />
+                <select
+                  value={accessRole}
+                  onChange={(e) => setAccessRole(e.target.value as AccessRole)}
+                  className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
+                >
+                  {ACCESS_ROLES.filter((role) => role !== "owner").map(
+                    (role) => (
+                      <option key={role} value={role}>
+                        {labelize(role)}
+                      </option>
+                    ),
+                  )}
+                </select>
+                <button
+                  onClick={saveAccessGrant}
+                  disabled={!accessEmail.trim()}
+                  className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
+                >
+                  Grant
+                </button>
+              </div>
+
+              <div className="overflow-hidden rounded-lg border border-gray-100">
+                {accessGrants.length === 0 ? (
+                  <div className="px-4 py-6 text-center text-sm text-gray-400">
+                    Belum ada user tambahan.
+                  </div>
+                ) : (
+                  accessGrants.map((grant) => (
+                    <div
+                      key={grant.id}
+                      className="flex items-center justify-between border-b border-gray-50 px-4 py-3 last:border-b-0"
+                    >
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {grant.user_email}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {labelize(grant.role)}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => removeAccessGrant(grant.id)}
+                        className="p-1.5 text-gray-400 hover:text-red-500"
+                        title="Hapus akses"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
         </div>

@@ -20,6 +20,7 @@ import {
 import { supabase } from "../lib/supabase";
 import {
   labelize,
+  labelizeDefectStatus,
   normalizeDefectPriority,
   normalizeDefectStatus,
   normalizeTestCaseStatus,
@@ -50,7 +51,9 @@ type RecordingStep = {
 };
 type CountQuery = {
   eq: (column: string, value: string) => CountQuery;
-  then: PromiseLike<{ count: number | null; error: unknown } | { count: null; error: unknown }>["then"];
+  then: PromiseLike<
+    { count: number | null; error: unknown } | { count: null; error: unknown }
+  >["then"];
 };
 type CountFilter = (query: CountQuery) => CountQuery;
 
@@ -89,8 +92,7 @@ function getStatusPill(status?: string) {
   const normalized = normalizeTestCaseStatus(status);
   if (normalized === "pass") return "bg-emerald-50 text-emerald-700";
   if (normalized === "fail") return "bg-red-50 text-red-700";
-  if (normalized === "skip")
-    return "bg-amber-50 text-amber-700";
+  if (normalized === "skip") return "bg-amber-50 text-amber-700";
   if (normalized === "not_run") return "bg-slate-100 text-slate-500";
   return "bg-slate-100 text-slate-600";
 }
@@ -441,9 +443,10 @@ export default function Dashboard() {
     setLoading(true);
     const byProject = <T,>(query: T): T => {
       if (!selectedProjectId) return query;
-      return (
-        query as { eq: (column: string, value: string) => T }
-      ).eq("project_id", selectedProjectId);
+      return (query as { eq: (column: string, value: string) => T }).eq(
+        "project_id",
+        selectedProjectId,
+      );
     };
 
     const [
@@ -517,8 +520,8 @@ export default function Dashboard() {
     const recentDefectsData: Defect[] = recentDefectsResult.error
       ? []
       : recentDefectsResult.data || [];
-    const openDefects = recentDefectsData.filter((defect) =>
-      ["open", "in_progress"].includes(normalizeDefectStatus(defect.status)),
+    const openDefects = recentDefectsData.filter(
+      (defect) => normalizeDefectStatus(defect.status) !== "solved",
     ).length;
     const criticalDefects = recentDefectsData.filter(
       (defect) =>
@@ -780,9 +783,7 @@ export default function Dashboard() {
                 <p className="text-xs font-semibold uppercase tracking-wide text-emerald-300">
                   Quality Pulse
                 </p>
-                <h2 className="mt-2 text-2xl font-semibold">
-                  {qualityStatus}
-                </h2>
+                <h2 className="mt-2 text-2xl font-semibold">{qualityStatus}</h2>
                 <p className="mt-2 text-sm text-slate-300">
                   Fokus utama kualitas dari test case yang sedang difilter.
                 </p>
@@ -1071,7 +1072,7 @@ export default function Dashboard() {
                           defect.priority || defect.severity,
                         ),
                       )}{" "}
-                      · {labelize(normalizeDefectStatus(defect.status))}
+                      · {labelizeDefectStatus(defect.status)}
                     </p>
                   </div>
                   <ShieldAlert size={17} className="text-red-500" />
