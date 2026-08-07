@@ -4,24 +4,24 @@ export default function Login() {
   const { signInWithGoogle } = useAuth();
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="bg-white border border-gray-200 rounded-2xl p-10 w-full max-w-sm text-center shadow-sm">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="bg-white border border-slate-200 rounded-2xl p-10 w-full max-w-sm text-center shadow-sm">
         {/* Logo */}
-        <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center mx-auto mb-4">
+        <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center mx-auto mb-4">
           <span className="text-white font-semibold text-lg">QA</span>
         </div>
 
-        <h1 className="text-xl font-semibold text-gray-900 mb-1">
+        <h1 className="text-xl font-semibold text-slate-900 mb-1">
           Masuk ke QAForge
         </h1>
-        <p className="text-sm text-gray-500 mb-8">
+        <p className="text-sm text-slate-500 mb-8">
           Platform manajemen pengujian untuk tim QA profesional
         </p>
 
         {/* Google Button */}
         <button
           onClick={signInWithGoogle}
-          className="w-full flex items-center justify-center gap-3 px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          className="w-full flex items-center justify-center gap-3 px-4 py-2.5 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
         >
           <svg width="18" height="18" viewBox="0 0 24 24">
             <path
@@ -44,7 +44,7 @@ export default function Login() {
           Lanjutkan dengan Google
         </button>
 
-        <p className="mt-6 text-xs text-gray-400">
+        <p className="mt-6 text-xs text-slate-400">
           Dengan masuk, Anda menyetujui Syarat Layanan dan Kebijakan Privasi
           QAForge.
         </p>

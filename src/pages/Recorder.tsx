@@ -156,22 +156,22 @@ export default function Recorder() {
   return (
     <div className="p-8">
       <div className="mb-6">
-        <h1 className="text-xl font-semibold text-gray-900">Web Recorder</h1>
-        <p className="text-sm text-gray-500 mt-0.5">
+        <h1 className="text-xl font-semibold text-slate-900">Web Recorder</h1>
+        <p className="text-sm text-slate-500 mt-0.5">
           Hasil rekaman dari Chrome Extension — simpan langsung sebagai test
           case
         </p>
       </div>
 
       {steps.length === 0 ? (
-        <div className="bg-white border border-dashed border-gray-300 rounded-xl p-12 text-center">
-          <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center mx-auto mb-4">
-            <RefreshCw size={20} className="text-gray-400" />
+        <div className="bg-white border border-dashed border-slate-300 rounded-xl p-12 text-center">
+          <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-4">
+            <RefreshCw size={20} className="text-slate-400" />
           </div>
-          <p className="text-sm font-medium text-gray-600 mb-1">
+          <p className="text-sm font-medium text-slate-600 mb-1">
             Belum ada data rekaman
           </p>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-slate-400">
             Gunakan Chrome Extension QAForge Recorder, rekam pengujian, lalu
             klik "Kirim ke QAForge App"
           </p>
@@ -181,14 +181,14 @@ export default function Recorder() {
           {/* Kiri — Steps & Gherkin */}
           <div className="flex flex-col gap-4">
             {/* Tab switcher */}
-            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-              <div className="flex border-b border-gray-100">
+            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+              <div className="flex border-b border-slate-100">
                 <button
                   onClick={() => setActiveTab("steps")}
                   className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
                     activeTab === "steps"
-                      ? "bg-white text-gray-900 border-b-2 border-emerald-500"
-                      : "text-gray-400 hover:text-gray-600"
+                      ? "bg-white text-slate-900 border-b-2 border-indigo-600"
+                      : "text-slate-400 hover:text-slate-600"
                   }`}
                 >
                   Steps ({steps.length})
@@ -197,8 +197,8 @@ export default function Recorder() {
                   onClick={() => setActiveTab("gherkin")}
                   className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
                     activeTab === "gherkin"
-                      ? "bg-white text-gray-900 border-b-2 border-emerald-500"
-                      : "text-gray-400 hover:text-gray-600"
+                      ? "bg-white text-slate-900 border-b-2 border-indigo-600"
+                      : "text-slate-400 hover:text-slate-600"
                   }`}
                 >
                   Gherkin
@@ -210,12 +210,12 @@ export default function Recorder() {
                   {steps.map((step, i) => (
                     <div
                       key={i}
-                      className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg"
+                      className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg"
                     >
-                      <span className="text-xs text-gray-400 min-w-5 mt-0.5">
+                      <span className="text-xs text-slate-400 min-w-5 mt-0.5">
                         {i + 1}.
                       </span>
-                      <span className="text-sm text-gray-700 flex-1">
+                      <span className="text-sm text-slate-700 flex-1">
                         {stepText(step)}
                       </span>
                       <span
@@ -230,12 +230,12 @@ export default function Recorder() {
                 </div>
               ) : (
                 <div className="p-4">
-                  <pre className="bg-gray-900 text-gray-100 rounded-lg p-4 text-xs leading-relaxed overflow-x-auto max-h-96 overflow-y-auto whitespace-pre-wrap">
+                  <pre className="bg-slate-900 text-slate-100 rounded-lg p-4 text-xs leading-relaxed overflow-x-auto max-h-96 overflow-y-auto whitespace-pre-wrap">
                     {gherkin}
                   </pre>
                   <button
                     onClick={() => navigator.clipboard.writeText(gherkin)}
-                    className="mt-2 text-xs text-gray-400 hover:text-gray-600"
+                    className="mt-2 text-xs text-slate-400 hover:text-slate-600"
                   >
                     Salin ke clipboard
                   </button>
@@ -245,22 +245,22 @@ export default function Recorder() {
           </div>
 
           {/* Kanan — Simpan ke Test Case */}
-          <div className="bg-white border border-gray-200 rounded-xl p-5">
-            <h2 className="text-sm font-semibold text-gray-900 mb-4">
+          <div className="bg-white border border-slate-200 rounded-xl p-5">
+            <h2 className="text-sm font-semibold text-slate-900 mb-4">
               Simpan sebagai Test Case
             </h2>
 
             <div className="flex flex-col gap-3">
               {/* Pilih Project */}
               <div>
-                <label className="text-xs font-medium text-gray-600 mb-1 block">
+                <label className="text-xs font-medium text-slate-600 mb-1 block">
                   Project
                 </label>
                 <div className="relative">
                   <select
                     value={selectedProject}
                     onChange={(e) => setSelectedProject(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-emerald-400 appearance-none bg-white"
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-400 appearance-none bg-white"
                   >
                     <option value="">Pilih project...</option>
                     {projects.map((p) => (
@@ -271,14 +271,14 @@ export default function Recorder() {
                   </select>
                   <ChevronDown
                     size={14}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
                   />
                 </div>
               </div>
 
               {/* Judul Test Case */}
               <div>
-                <label className="text-xs font-medium text-gray-600 mb-1 block">
+                <label className="text-xs font-medium text-slate-600 mb-1 block">
                   Judul Test Case
                 </label>
                 <input
@@ -286,20 +286,20 @@ export default function Recorder() {
                   value={tcTitle}
                   onChange={(e) => setTcTitle(e.target.value)}
                   placeholder="contoh: Login dengan kredensial valid"
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-emerald-400"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-400"
                 />
               </div>
 
               {/* Priority */}
               <div>
-                <label className="text-xs font-medium text-gray-600 mb-1 block">
+                <label className="text-xs font-medium text-slate-600 mb-1 block">
                   Priority
                 </label>
                 <div className="relative">
                   <select
                     value={tcPriority}
                     onChange={(e) => setTcPriority(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-emerald-400 appearance-none bg-white"
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-400 appearance-none bg-white"
                   >
                     <option value="critical">Critical</option>
                     <option value="high">High</option>
@@ -308,14 +308,14 @@ export default function Recorder() {
                   </select>
                   <ChevronDown
                     size={14}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
                   />
                 </div>
               </div>
 
               {/* Tester */}
               <div>
-                <label className="text-xs font-medium text-gray-600 mb-1 block">
+                <label className="text-xs font-medium text-slate-600 mb-1 block">
                   Tester
                 </label>
                 <input
@@ -323,27 +323,27 @@ export default function Recorder() {
                   value={tester}
                   onChange={(e) => setTester(e.target.value)}
                   placeholder="Nama tester"
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-emerald-400"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-400"
                 />
               </div>
 
               {/* Preview info */}
-              <div className="bg-gray-50 rounded-lg p-3 text-xs text-gray-500 space-y-1">
+              <div className="bg-slate-50 rounded-lg p-3 text-xs text-slate-500 space-y-1">
                 <div className="flex justify-between">
                   <span>Total steps</span>
-                  <span className="font-medium text-gray-700">
+                  <span className="font-medium text-slate-700">
                     {steps.length} langkah
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Steps akan disimpan di</span>
-                  <span className="font-medium text-gray-700">
+                  <span className="font-medium text-slate-700">
                     kolom "Steps"
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Gherkin akan disimpan di</span>
-                  <span className="font-medium text-gray-700">
+                  <span className="font-medium text-slate-700">
                     kolom "Expected Result"
                   </span>
                 </div>
@@ -353,7 +353,7 @@ export default function Recorder() {
               <button
                 onClick={saveToTestCase}
                 disabled={!selectedProject || !tcTitle.trim() || saving}
-                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-500 text-white text-sm font-medium rounded-lg hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <Save size={15} />
                 {saving

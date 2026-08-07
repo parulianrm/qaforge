@@ -62,14 +62,14 @@ export default function Projects() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Projects</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <h1 className="text-xl font-semibold text-slate-900">Projects</h1>
+          <p className="text-sm text-slate-500 mt-0.5">
             Kelola test case per project
           </p>
         </div>
         <button
           onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white text-sm font-medium rounded-lg hover:bg-emerald-600 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
         >
           <Plus size={16} />
           Project Baru
@@ -79,10 +79,10 @@ export default function Projects() {
       {/* Project Grid */}
       {loading ? (
         <div className="flex justify-center py-20">
-          <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : projects.length === 0 ? (
-        <div className="text-center py-20 text-gray-400">
+        <div className="text-center py-20 text-slate-400">
           <FolderOpen size={40} className="mx-auto mb-3 opacity-40" />
           <p className="text-sm">
             Belum ada project. Buat project pertama Anda.
@@ -94,26 +94,26 @@ export default function Projects() {
             <div
               key={project.id}
               onClick={() => navigate(`/projects/${project.id}`)}
-              className="bg-white border border-gray-200 rounded-xl p-5 cursor-pointer hover:border-emerald-400 hover:shadow-sm transition-all group"
+              className="bg-white border border-slate-200 rounded-xl p-5 cursor-pointer hover:border-indigo-400 hover:shadow-sm transition-all group"
             >
               <div className="flex items-start justify-between mb-3">
-                <div className="w-9 h-9 bg-emerald-50 rounded-lg flex items-center justify-center">
-                  <FolderOpen size={18} className="text-emerald-500" />
+                <div className="w-9 h-9 bg-indigo-50 rounded-lg flex items-center justify-center">
+                  <FolderOpen size={18} className="text-indigo-600" />
                 </div>
                 <button
                   onClick={(e) => deleteProject(project.id, e)}
-                  className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-red-500 transition-all"
+                  className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-red-500 transition-all"
                 >
                   <Trash2 size={14} />
                 </button>
               </div>
-              <h3 className="font-semibold text-gray-900 text-sm mb-1">
+              <h3 className="font-semibold text-slate-900 text-sm mb-1">
                 {project.name}
               </h3>
-              <p className="text-xs text-gray-500 line-clamp-2">
+              <p className="text-xs text-slate-500 line-clamp-2">
                 {project.description || "Tidak ada deskripsi"}
               </p>
-              <p className="text-xs text-gray-400 mt-3">
+              <p className="text-xs text-slate-400 mt-3">
                 {new Date(project.created_at).toLocaleDateString("id-ID", {
                   day: "numeric",
                   month: "long",
@@ -129,12 +129,12 @@ export default function Projects() {
       {showModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
-            <h2 className="text-base font-semibold text-gray-900 mb-4">
+            <h2 className="text-base font-semibold text-slate-900 mb-4">
               Buat Project Baru
             </h2>
             <div className="flex flex-col gap-3">
               <div>
-                <label className="text-xs font-medium text-gray-600 mb-1 block">
+                <label className="text-xs font-medium text-slate-600 mb-1 block">
                   Nama Project
                 </label>
                 <input
@@ -142,12 +142,12 @@ export default function Projects() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="contoh: QA Mobile App v2"
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-emerald-400"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-400"
                   autoFocus
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-gray-600 mb-1 block">
+                <label className="text-xs font-medium text-slate-600 mb-1 block">
                   Deskripsi (opsional)
                 </label>
                 <textarea
@@ -155,21 +155,21 @@ export default function Projects() {
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Deskripsi singkat project ini..."
                   rows={3}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-emerald-400 resize-none"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-400 resize-none"
                 />
               </div>
             </div>
             <div className="flex gap-2 mt-5">
               <button
                 onClick={() => setShowModal(false)}
-                className="flex-1 px-4 py-2 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50"
+                className="flex-1 px-4 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50"
               >
                 Batal
               </button>
               <button
                 onClick={createProject}
                 disabled={creating || !name.trim()}
-                className="flex-1 px-4 py-2 text-sm bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 disabled:opacity-50 font-medium"
+                className="flex-1 px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 font-medium"
               >
                 {creating ? "Membuat..." : "Buat Project"}
               </button>

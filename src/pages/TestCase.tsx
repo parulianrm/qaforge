@@ -239,29 +239,29 @@ export default function TestCasePage() {
       <div className="flex items-center gap-3 mb-1">
         <button
           onClick={() => navigate("/projects")}
-          className="text-gray-400 hover:text-gray-600"
+          className="text-slate-400 hover:text-slate-600"
         >
           <ArrowLeft size={18} />
         </button>
-        <h1 className="text-xl font-semibold text-gray-900">{project?.name}</h1>
+        <h1 className="text-xl font-semibold text-slate-900">{project?.name}</h1>
       </div>
-      <p className="text-sm text-gray-500 mb-6 ml-7">{project?.description}</p>
+      <p className="text-sm text-slate-500 mb-6 ml-7">{project?.description}</p>
 
       <div className="flex gap-2 mb-5">
         <button
           onClick={openCreate}
-          className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white text-sm font-medium rounded-lg hover:bg-emerald-600 cursor-pointer transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 cursor-pointer transition-colors"
         >
           <Plus size={15} /> Tambah Test Case
         </button>
         <button
           onClick={downloadTemplate}
-          className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-sm text-gray-600 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+          className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors"
         >
           <Download size={15} /> Unduh Template
         </button>
 
-        <label className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-sm text-gray-600 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+        <label className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
           <Upload size={15} /> Upload Excel
           <input
             type="file"
@@ -273,7 +273,7 @@ export default function TestCasePage() {
         <button
           onClick={downloadTestCases}
           disabled={testCases.length === 0}
-          className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-sm text-gray-600 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Download size={15} /> Download Test Cases
         </button>
@@ -281,7 +281,7 @@ export default function TestCasePage() {
 
       <div className="grid grid-cols-4 gap-3 mb-5">
         {[
-          { label: "Total", value: testCases.length, color: "text-gray-900" },
+          { label: "Total", value: testCases.length, color: "text-slate-900" },
           {
             label: "Pass",
             value: testCases.filter((t) => t.status === "pass").length,
@@ -295,52 +295,52 @@ export default function TestCasePage() {
           {
             label: "Not Run",
             value: testCases.filter((t) => t.status === "not_run").length,
-            color: "text-gray-400",
+            color: "text-slate-400",
           },
         ].map((s) => (
           <div
             key={s.label}
-            className="bg-white border border-gray-200 rounded-xl p-4"
+            className="bg-white border border-slate-200 rounded-xl p-4"
           >
-            <p className="text-xs text-gray-500 mb-1">{s.label}</p>
+            <p className="text-xs text-slate-500 mb-1">{s.label}</p>
             <p className={`text-2xl font-semibold ${s.color}`}>{s.value}</p>
           </div>
         ))}
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
         {loading ? (
           <div className="flex justify-center py-16">
-            <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+            <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : testCases.length === 0 ? (
-          <div className="text-center py-16 text-gray-400 text-sm">
+          <div className="text-center py-16 text-slate-400 text-sm">
             Belum ada test case. Tambah manual atau upload Excel.
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 w-20">
+                <tr className="border-b border-slate-100 bg-slate-50">
+                  <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 w-20">
                     TC ID
                   </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 w-28">
+                  <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 w-28">
                     Module
                   </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">
+                  <th className="text-left px-4 py-3 text-xs font-medium text-slate-500">
                     Judul
                   </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">
+                  <th className="text-left px-4 py-3 text-xs font-medium text-slate-500">
                     Cucumber Scenario
                   </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 w-24">
+                  <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 w-24">
                     Priority
                   </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 w-28">
+                  <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 w-28">
                     Status
                   </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 w-24">
+                  <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 w-24">
                     Tester
                   </th>
                   <th className="px-4 py-3 w-20"></th>
@@ -350,18 +350,18 @@ export default function TestCasePage() {
                 {testCases.map((tc, i) => (
                   <tr
                     key={tc.id}
-                    className={`border-b border-gray-50 hover:bg-gray-50 transition-colors ${
-                      i % 2 === 0 ? "" : "bg-gray-50/30"
+                    className={`border-b border-slate-50 hover:bg-slate-50 transition-colors ${
+                      i % 2 === 0 ? "" : "bg-slate-50/30"
                     }`}
                   >
-                    <td className="px-4 py-3 text-xs text-gray-400 font-mono">
+                    <td className="px-4 py-3 text-xs text-slate-400 font-mono">
                       {tc.tc_id}
                     </td>
-                    <td className="px-4 py-3 text-gray-600">{tc.module}</td>
-                    <td className="px-4 py-3 text-gray-900 font-medium">
+                    <td className="px-4 py-3 text-slate-600">{tc.module}</td>
+                    <td className="px-4 py-3 text-slate-900 font-medium">
                       {tc.title}
                     </td>
-                    <td className="px-4 py-3 text-gray-900 font-medium whitespace-pre-line">
+                    <td className="px-4 py-3 text-slate-900 font-medium whitespace-pre-line">
                       {tc.expected_result}
                     </td>
                     <td className="px-4 py-3">
@@ -388,20 +388,20 @@ export default function TestCasePage() {
                         ))}
                       </select>
                     </td>
-                    <td className="px-4 py-3 text-gray-500 text-xs">
+                    <td className="px-4 py-3 text-slate-500 text-xs">
                       {tc.tester || "—"}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => openEdit(tc)}
-                          className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors"
+                          className="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors"
                         >
                           <Pencil size={13} />
                         </button>
                         <button
                           onClick={() => deleteTestCase(tc.id)}
-                          className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
+                          className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
                         >
                           <Trash2 size={13} />
                         </button>
@@ -418,8 +418,8 @@ export default function TestCasePage() {
       {showModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-2xl shadow-xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <h2 className="font-semibold text-gray-900">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <h2 className="font-semibold text-slate-900">
                 {editingId ? "Edit Test Case" : "Tambah Test Case"}
               </h2>
               <button
@@ -427,7 +427,7 @@ export default function TestCasePage() {
                   setShowModal(false);
                   resetForm();
                 }}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-slate-400 hover:text-slate-600"
               >
                 <X size={18} />
               </button>
@@ -439,7 +439,7 @@ export default function TestCasePage() {
                 { label: "Tester", key: "tester", placeholder: "Nama tester" },
               ].map((f) => (
                 <div key={f.key}>
-                  <label className="text-xs font-medium text-gray-600 mb-1 block">
+                  <label className="text-xs font-medium text-slate-600 mb-1 block">
                     {f.label}
                   </label>
                   <input
@@ -449,12 +449,12 @@ export default function TestCasePage() {
                       setForm((p) => ({ ...p, [f.key]: e.target.value }))
                     }
                     placeholder={f.placeholder}
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-emerald-400"
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-400"
                   />
                 </div>
               ))}
               <div>
-                <label className="text-xs font-medium text-gray-600 mb-1 block">
+                <label className="text-xs font-medium text-slate-600 mb-1 block">
                   Priority
                 </label>
                 <select
@@ -462,7 +462,7 @@ export default function TestCasePage() {
                   onChange={(e) =>
                     setForm((p) => ({ ...p, priority: e.target.value }))
                   }
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-emerald-400"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-400"
                 >
                   <option value="critical">Critical</option>
                   <option value="high">High</option>
@@ -471,7 +471,7 @@ export default function TestCasePage() {
                 </select>
               </div>
               <div>
-                <label className="text-xs font-medium text-gray-600 mb-1 block">
+                <label className="text-xs font-medium text-slate-600 mb-1 block">
                   Status
                 </label>
                 <select
@@ -479,7 +479,7 @@ export default function TestCasePage() {
                   onChange={(e) =>
                     setForm((p) => ({ ...p, status: e.target.value }))
                   }
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-emerald-400"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-400"
                 >
                   <option value="not_run">Not Run</option>
                   <option value="pass">Pass</option>
@@ -488,7 +488,7 @@ export default function TestCasePage() {
                 </select>
               </div>
               <div className="col-span-2">
-                <label className="text-xs font-medium text-gray-600 mb-1 block">
+                <label className="text-xs font-medium text-slate-600 mb-1 block">
                   Judul Test Case
                 </label>
                 <input
@@ -498,7 +498,7 @@ export default function TestCasePage() {
                     setForm((p) => ({ ...p, title: e.target.value }))
                   }
                   placeholder="Deskripsi singkat test case"
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-emerald-400"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-400"
                 />
               </div>
               {[
@@ -524,7 +524,7 @@ export default function TestCasePage() {
                 },
               ].map((f) => (
                 <div key={f.key} className="col-span-2">
-                  <label className="text-xs font-medium text-gray-600 mb-1 block">
+                  <label className="text-xs font-medium text-slate-600 mb-1 block">
                     {f.label}
                   </label>
                   <textarea
@@ -534,7 +534,7 @@ export default function TestCasePage() {
                     }
                     placeholder={f.placeholder}
                     rows={3}
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-emerald-400 resize-none"
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-400 resize-none"
                   />
                 </div>
               ))}
@@ -545,14 +545,14 @@ export default function TestCasePage() {
                   setShowModal(false);
                   resetForm();
                 }}
-                className="flex-1 px-4 py-2 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50"
+                className="flex-1 px-4 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50"
               >
                 Batal
               </button>
               <button
                 onClick={saveTestCase}
                 disabled={!form.title.trim()}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 disabled:opacity-50 font-medium"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 font-medium"
               >
                 <Check size={15} />
                 {editingId ? "Simpan Perubahan" : "Tambah Test Case"}
