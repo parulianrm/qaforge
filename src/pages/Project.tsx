@@ -1,13 +1,22 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, FolderOpen, Trash2 } from "lucide-react";
+import { Plus, FolderOpen, Trash2, Pencil } from "lucide-react";
 import { supabase } from "../lib/supabase";
-import { Project } from "../types";
+import { useAuth } from "../hooks/useAuth";
+import { Project, TestCase } from "../types";
+
+interface ProjectSummary {
+  testCases: number;
+  modules: number;
+}
 
 export default function Projects() {
+  const { user } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
+  const [summaries, setSummaries] = useState<Record<string, ProjectSummary>>({});
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [creating, setCreating] = useState(false);
@@ -23,28 +32,80 @@ export default function Projects() {
       .from("projects")
       .select("*")
       .order("created_at", { ascending: false });
-    if (!error && data) setProjects(data);
+    if (!error && data) {
+      setProjects(data);
+      fetchProjectSummaries(data);
+    }
     setLoading(false);
   }
 
-  async function createProject() {
+  async function fetchProjectSummaries(projectRows: Project[]) {
+    if (projectRows.length === 0) {
+      setSummaries({});
+      return;
+    }
+    const ids = projectRows.map((project) => project.id);
+    const { data } = await supabase
+      .from("test_cases")
+      .select("project_id,module")
+      .in("project_id", ids);
+    const next: Record<string, ProjectSummary> = {};
+    projectRows.forEach((project) => {
+      const rows = ((data || []) as Pick<TestCase, "project_id" | "module">[]).filter(
+        (tc) => tc.project_id === project.id,
+      );
+      next[project.id] = {
+        testCases: rows.length,
+        modules: new Set(rows.map((tc) => tc.module).filter(Boolean)).size,
+      };
+    });
+    setSummaries(next);
+  }
+
+  function openCreate() {
+    setEditingProject(null);
+    setName("");
+    setDescription("");
+    setShowModal(true);
+  }
+
+  function openEdit(project: Project, e: React.MouseEvent) {
+    e.stopPropagation();
+    setEditingProject(project);
+    setName(project.name);
+    setDescription(project.description || "");
+    setShowModal(true);
+  }
+
+  async function saveProject() {
     if (!name.trim()) return;
     setCreating(true);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    const { error } = await supabase.from("projects").insert({
+    const payload = {
       name: name.trim(),
       description: description.trim(),
-      owner_id: user?.id,
-    });
+    };
+    const { error } = editingProject
+      ? await supabase.from("projects").update(payload).eq("id", editingProject.id)
+      : await createProject(payload);
     if (!error) {
       setName("");
       setDescription("");
+      setEditingProject(null);
       setShowModal(false);
       fetchProjects();
     }
     setCreating(false);
+  }
+
+  async function createProject(payload: { name: string; description: string }) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    return supabase.from("projects").insert({
+      ...payload,
+      owner_id: user?.id,
+      created_by: user?.id,
+    });
   }
 
   async function deleteProject(id: string, e: React.MouseEvent) {
@@ -55,6 +116,10 @@ export default function Projects() {
       return;
     await supabase.from("projects").delete().eq("id", id);
     fetchProjects();
+  }
+
+  function isProjectOwner(project: Project) {
+    return project.owner_id === user?.id || project.created_by === user?.id;
   }
 
   return (
@@ -68,7 +133,7 @@ export default function Projects() {
           </p>
         </div>
         <button
-          onClick={() => setShowModal(true)}
+          onClick={openCreate}
           className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white text-sm font-medium rounded-lg hover:bg-emerald-600 transition-colors"
         >
           <Plus size={16} />
@@ -100,12 +165,24 @@ export default function Projects() {
                 <div className="w-9 h-9 bg-emerald-50 rounded-lg flex items-center justify-center">
                   <FolderOpen size={18} className="text-emerald-500" />
                 </div>
-                <button
-                  onClick={(e) => deleteProject(project.id, e)}
-                  className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-red-500 transition-all"
-                >
-                  <Trash2 size={14} />
-                </button>
+                {isProjectOwner(project) && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={(e) => openEdit(project, e)}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-blue-500 transition-all"
+                      title="Edit project"
+                    >
+                      <Pencil size={14} />
+                    </button>
+                    <button
+                      onClick={(e) => deleteProject(project.id, e)}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-red-500 transition-all"
+                      title="Hapus project"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                )}
               </div>
               <h3 className="font-semibold text-gray-900 text-sm mb-1">
                 {project.name}
@@ -113,7 +190,16 @@ export default function Projects() {
               <p className="text-xs text-gray-500 line-clamp-2">
                 {project.description || "Tidak ada deskripsi"}
               </p>
+              <div className="flex items-center gap-2 mt-4 text-xs text-gray-500">
+                <span className="rounded-full bg-gray-100 px-2 py-0.5">
+                  {summaries[project.id]?.modules || 0} module
+                </span>
+                <span className="rounded-full bg-gray-100 px-2 py-0.5">
+                  {summaries[project.id]?.testCases || 0} test case
+                </span>
+              </div>
               <p className="text-xs text-gray-400 mt-3">
+                Dibuat{" "}
                 {new Date(project.created_at).toLocaleDateString("id-ID", {
                   day: "numeric",
                   month: "long",
@@ -130,7 +216,7 @@ export default function Projects() {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
             <h2 className="text-base font-semibold text-gray-900 mb-4">
-              Buat Project Baru
+              {editingProject ? "Edit Project" : "Buat Project Baru"}
             </h2>
             <div className="flex flex-col gap-3">
               <div>
@@ -161,17 +247,24 @@ export default function Projects() {
             </div>
             <div className="flex gap-2 mt-5">
               <button
-                onClick={() => setShowModal(false)}
+                onClick={() => {
+                  setShowModal(false);
+                  setEditingProject(null);
+                }}
                 className="flex-1 px-4 py-2 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50"
               >
                 Batal
               </button>
               <button
-                onClick={createProject}
+                onClick={saveProject}
                 disabled={creating || !name.trim()}
                 className="flex-1 px-4 py-2 text-sm bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 disabled:opacity-50 font-medium"
               >
-                {creating ? "Membuat..." : "Buat Project"}
+                {creating
+                  ? "Menyimpan..."
+                  : editingProject
+                    ? "Simpan Project"
+                    : "Buat Project"}
               </button>
             </div>
           </div>

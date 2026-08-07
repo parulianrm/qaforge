@@ -1,6 +1,6 @@
 {
     "manifest_version": 3,
-    "name": "QAForge Recorder",
+    "name": "HavoX Recorder",
     "version": "1.0.0",
     "description": "Record web interactions and generate Gherkin scenarios",
     "permissions": [

@@ -1,16 +1,38 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
-  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
   Plus,
   Upload,
   Download,
   Pencil,
   Trash2,
   Check,
+  ClipboardList,
+  ShieldCheck,
+  Users,
   X,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import {
+  ACCESS_ROLES,
+  AccessRole,
+  ProjectAccessGrant,
+  canEdit,
+  canManageAccess,
+  getLocalProjectRole,
+} from "../lib/access";
+import {
+  TEST_CASE_PRIORITIES,
+  TEST_CASE_STATUSES,
+  labelize,
+  normalizeTestCasePriority,
+  normalizeTestCaseStatus,
+} from "../lib/domain";
+import { formatTestCaseCode } from "../lib/testCaseCode";
+import { getUserDisplayName } from "../lib/userProfile";
+import { useAuth } from "../hooks/useAuth";
 import { TestCase, Project } from "../types";
 import * as XLSX from "xlsx";
 
@@ -28,22 +50,91 @@ const STATUS_COLORS: Record<string, string> = {
   not_run: "bg-gray-100 text-gray-400",
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  pass: "Pass",
-  fail: "Fail",
-  skip: "Skip",
-  not_run: "Not Run",
+const PAGE_SIZE = 10;
+type TestCaseForm = {
+  tc_id: string;
+  module: string;
+  title: string;
+  precondition: string;
+  steps: string;
+  expected_result: string;
+  actual_result: string;
+  priority: string;
+  status: string;
+  tester: string;
 };
+type TestCaseExcelRow = Record<string, string | number | undefined>;
+
+function cellText(value: string | number | undefined) {
+  return value == null ? "" : String(value);
+}
+
+function PaginationControls({
+  page,
+  total,
+  onPageChange,
+}: {
+  page: number;
+  total: number;
+  onPageChange: (page: number) => void;
+}) {
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if (totalPages <= 1) return null;
+
+  return (
+    <div className="flex items-center justify-between border-t border-gray-100 px-4 py-3 text-xs text-gray-500">
+      <span>
+        Page {page} of {totalPages}
+      </span>
+      <div className="flex gap-2">
+        <button
+          onClick={() => onPageChange(Math.max(1, page - 1))}
+          disabled={page === 1}
+          className="rounded-md border border-gray-200 p-1.5 text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+          title="Previous page"
+        >
+          <ChevronLeft size={16} />
+        </button>
+        <button
+          onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+          disabled={page === totalPages}
+          className="rounded-md border border-gray-200 p-1.5 text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+          title="Next page"
+        >
+          <ChevronRight size={16} />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function TestCasePage() {
   const { projectId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const defaultTester = getUserDisplayName(user);
+
   const [project, setProject] = useState<Project | null>(null);
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filterModule, setFilterModule] = useState("");
+  const [filterTitle, setFilterTitle] = useState("");
+  const [filterPriority, setFilterPriority] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
+  const [appliedFilters, setAppliedFilters] = useState({
+    module: "",
+    title: "",
+    priority: "",
+    status: "",
+  });
+  const [page, setPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
+  const [showAccessModal, setShowAccessModal] = useState(false);
+  const [accessGrants, setAccessGrants] = useState<ProjectAccessGrant[]>([]);
+  const [accessEmail, setAccessEmail] = useState("");
+  const [accessRole, setAccessRole] = useState<AccessRole>("viewer");
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<TestCaseForm>({
     tc_id: "",
     module: "",
     title: "",
@@ -58,10 +149,90 @@ export default function TestCasePage() {
 
   useEffect(() => {
     if (projectId) {
+      setPage(1);
+      setFilterModule("");
+      setFilterTitle("");
+      setFilterPriority("");
+      setFilterStatus("");
+      setAppliedFilters({ module: "", title: "", priority: "", status: "" });
       fetchProject();
       fetchTestCases();
+      fetchAccessGrants();
     }
   }, [projectId]);
+
+  const moduleOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(testCases.map((tc) => tc.module).filter(Boolean)),
+      ).sort(),
+    [testCases],
+  );
+
+  const titleOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(testCases.map((tc) => tc.title).filter(Boolean)),
+      ).sort(),
+    [testCases],
+  );
+
+  const hasActiveFilters = Boolean(
+    appliedFilters.module ||
+    appliedFilters.title ||
+    appliedFilters.priority ||
+    appliedFilters.status,
+  );
+
+  function applyFilters() {
+    setAppliedFilters({
+      module: filterModule,
+      title: filterTitle,
+      priority: filterPriority,
+      status: filterStatus,
+    });
+    setPage(1);
+  }
+
+  function resetFilters() {
+    setFilterModule("");
+    setFilterTitle("");
+    setFilterPriority("");
+    setFilterStatus("");
+    setAppliedFilters({ module: "", title: "", priority: "", status: "" });
+    setPage(1);
+  }
+
+  const filteredTestCases = useMemo(() => {
+    const moduleKeyword = appliedFilters.module.trim().toLowerCase();
+    const titleKeyword = appliedFilters.title.trim().toLowerCase();
+
+    return testCases.filter((tc) => {
+      if (
+        moduleKeyword &&
+        !(tc.module || "").toLowerCase().includes(moduleKeyword)
+      )
+        return false;
+      if (appliedFilters.priority && tc.priority !== appliedFilters.priority)
+        return false;
+      if (appliedFilters.status && tc.status !== appliedFilters.status)
+        return false;
+      if (titleKeyword && !tc.title.toLowerCase().includes(titleKeyword))
+        return false;
+      return true;
+    });
+  }, [testCases, appliedFilters]);
+
+  const paginatedTestCases = useMemo(
+    () => filteredTestCases.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filteredTestCases, page],
+  );
+  const projectRole = useMemo(
+    () => getLocalProjectRole(project, user, accessGrants),
+    [accessGrants, project, user],
+  );
+  const editable = canEdit(projectRole);
+  const manageable = canManageAccess(projectRole);
 
   async function fetchProject() {
     const { data } = await supabase
@@ -83,6 +254,43 @@ export default function TestCasePage() {
     setLoading(false);
   }
 
+  async function fetchAccessGrants() {
+    if (!projectId) return;
+    const { data } = await supabase
+      .from("project_access")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("created_at", { ascending: true });
+    setAccessGrants((data || []) as ProjectAccessGrant[]);
+  }
+
+  async function saveAccessGrant() {
+    if (!projectId || !accessEmail.trim()) return;
+    const email = accessEmail.trim().toLowerCase();
+    const {
+      data: { user: currentUser },
+    } = await supabase.auth.getUser();
+    const { error } = await supabase.from("project_access").upsert(
+      {
+        project_id: projectId,
+        user_email: email,
+        role: accessRole,
+        created_by: currentUser?.id,
+      },
+      { onConflict: "project_id,user_email" },
+    );
+    if (!error) {
+      setAccessEmail("");
+      setAccessRole("viewer");
+      fetchAccessGrants();
+    }
+  }
+
+  async function removeAccessGrant(id: string) {
+    await supabase.from("project_access").delete().eq("id", id);
+    fetchAccessGrants();
+  }
+
   function resetForm() {
     setForm({
       tc_id: "",
@@ -94,19 +302,25 @@ export default function TestCasePage() {
       actual_result: "",
       priority: "medium",
       status: "not_run",
-      tester: "",
+      tester: defaultTester,
     });
     setEditingId(null);
   }
 
   function openCreate() {
+    if (!editable) return;
     resetForm();
-    const nextId = `TC-${String(testCases.length + 1).padStart(3, "0")}`;
-    setForm((f) => ({ ...f, tc_id: nextId }));
+    const nextId = formatTestCaseCode(project?.name, testCases.length + 1);
+    setForm((f) => ({
+      ...f,
+      tc_id: nextId,
+      tester: f.tester || defaultTester,
+    }));
     setShowModal(true);
   }
 
   function openEdit(tc: TestCase) {
+    if (!editable) return;
     setForm({
       tc_id: tc.tc_id,
       module: tc.module,
@@ -124,29 +338,63 @@ export default function TestCasePage() {
   }
 
   async function saveTestCase() {
+    if (!editable) return;
     if (!form.title.trim()) return;
     if (editingId) {
       await supabase
         .from("test_cases")
-        .update({ ...form })
+        .update({
+          ...form,
+          priority: normalizeTestCasePriority(form.priority),
+          status: normalizeTestCaseStatus(form.status),
+        })
         .eq("id", editingId);
     } else {
-      await supabase
-        .from("test_cases")
-        .insert({ ...form, project_id: projectId });
+      await supabase.from("test_cases").insert({
+        ...form,
+        priority: normalizeTestCasePriority(form.priority),
+        status: normalizeTestCaseStatus(form.status),
+        project_id: projectId,
+      });
     }
     setShowModal(false);
     resetForm();
     fetchTestCases();
   }
 
+  async function resequenceTestCaseIds() {
+    const { data, error } = await supabase
+      .from("test_cases")
+      .select("id")
+      .eq("project_id", projectId)
+      .order("created_at", { ascending: true });
+
+    if (error || !data) return;
+
+    await Promise.all(
+      data.map((tc, index) =>
+        supabase
+          .from("test_cases")
+          .update({
+            tc_id: formatTestCaseCode(project?.name, index + 1),
+          })
+          .eq("id", tc.id),
+      ),
+    );
+  }
+
   async function deleteTestCase(id: string) {
+    if (!editable) return;
     if (!confirm("Hapus test case ini?")) return;
-    await supabase.from("test_cases").delete().eq("id", id);
+    const { error } = await supabase.from("test_cases").delete().eq("id", id);
+    if (!error) {
+      await resequenceTestCaseIds();
+    }
     fetchTestCases();
   }
 
   async function updateStatus(id: string, status: string) {
+    if (!editable) return;
     await supabase.from("test_cases").update({ status }).eq("id", id);
     fetchTestCases();
   }
@@ -154,7 +402,7 @@ export default function TestCasePage() {
   function downloadTemplate() {
     const template = [
       {
-        "TC ID": "TC-001",
+        "TC ID": formatTestCaseCode(project?.name, 1),
         Module: "Login",
         Title: "Login dengan kredensial valid",
         Precondition: "User sudah terdaftar",
@@ -170,7 +418,7 @@ export default function TestCasePage() {
     const ws = XLSX.utils.json_to_sheet(template);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Test Cases");
-    XLSX.writeFile(wb, `template-testcase-${project?.name || "qaforge"}.xlsx`);
+    XLSX.writeFile(wb, `template-testcase-${project?.name || "havox"}.xlsx`);
   }
 
   function downloadTestCases() {
@@ -200,32 +448,33 @@ export default function TestCasePage() {
       { wch: 12 },
       { wch: 15 },
     ];
-
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Test Cases");
     XLSX.writeFile(wb, `testcase-${project?.name || "project"}.xlsx`);
   }
 
   function uploadExcel(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!editable) return;
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = async (evt) => {
       const wb = XLSX.read(evt.target?.result, { type: "binary" });
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws) as any[];
+      const rows = XLSX.utils.sheet_to_json(ws) as TestCaseExcelRow[];
       const inserts = rows.map((row, i) => ({
         project_id: projectId,
-        tc_id: row["TC ID"] || `TC-${String(i + 1).padStart(3, "0")}`,
-        module: row["Module"] || "",
-        title: row["Title"] || "",
-        precondition: row["Precondition"] || "",
-        steps: row["Steps"] || "",
-        expected_result: row["Expected Result"] || "",
-        actual_result: row["Actual Result"] || "",
-        priority: row["Priority"] || "medium",
-        status: row["Status"] || "not_run",
-        tester: row["Tester"] || "",
+        tc_id:
+          cellText(row["TC ID"]) || formatTestCaseCode(project?.name, i + 1),
+        module: cellText(row["Module"]),
+        title: cellText(row["Title"]),
+        precondition: cellText(row["Precondition"]),
+        steps: cellText(row["Steps"]),
+        expected_result: cellText(row["Expected Result"]),
+        actual_result: cellText(row["Actual Result"]),
+        priority: normalizeTestCasePriority(row["Priority"]),
+        status: normalizeTestCaseStatus(row["Status"]),
+        tester: cellText(row["Tester"]),
       }));
       await supabase.from("test_cases").insert(inserts);
       fetchTestCases();
@@ -240,43 +489,166 @@ export default function TestCasePage() {
         <button
           onClick={() => navigate("/projects")}
           className="text-gray-400 hover:text-gray-600"
+          title="Kembali ke project"
         >
-          <ArrowLeft size={18} />
+          <ChevronLeft size={18} />
         </button>
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+          <ClipboardList size={18} />
+        </div>
         <h1 className="text-xl font-semibold text-gray-900">{project?.name}</h1>
       </div>
-      <p className="text-sm text-gray-500 mb-6 ml-7">{project?.description}</p>
+      <p className="text-sm text-gray-500 mb-6 ml-16">{project?.description}</p>
 
-      <div className="flex gap-2 mb-5">
+      <div className="flex flex-wrap gap-2 mb-5">
         <button
           onClick={openCreate}
-          className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white text-sm font-medium rounded-lg hover:bg-emerald-600 cursor-pointer transition-colors"
+          disabled={!editable}
+          className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white text-sm font-medium rounded-lg hover:bg-emerald-600 transition-colors disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
         >
           <Plus size={15} /> Tambah Test Case
         </button>
         <button
           onClick={downloadTemplate}
-          className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-sm text-gray-600 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+          className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-sm text-gray-600 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
         >
           <Download size={15} /> Unduh Template
         </button>
-
         <label className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-sm text-gray-600 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
           <Upload size={15} /> Upload Excel
           <input
             type="file"
             accept=".xlsx,.xls"
             onChange={uploadExcel}
+            disabled={!editable}
             className="hidden"
           />
         </label>
         <button
           onClick={downloadTestCases}
           disabled={testCases.length === 0}
-          className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-sm text-gray-600 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-sm text-gray-600 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
         >
           <Download size={15} /> Download Test Cases
         </button>
+        <button
+          onClick={() => setShowAccessModal(true)}
+          disabled={!manageable}
+          className="flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+          title={
+            manageable
+              ? "Kelola akses dokumen"
+              : "Hanya owner yang dapat mengelola akses"
+          }
+        >
+          <Users size={15} /> Access
+        </button>
+      </div>
+
+      <div className="mb-5 rounded-xl border border-gray-200 bg-white p-4">
+        <h2 className="mb-3 text-sm font-semibold text-gray-900">
+          Filter Test Case
+        </h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">
+              Module
+            </label>
+            <input
+              type="text"
+              list="module-options"
+              value={filterModule}
+              onChange={(e) => setFilterModule(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && applyFilters()}
+              placeholder="Cari atau pilih module..."
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
+            />
+            <datalist id="module-options">
+              {moduleOptions.map((module) => (
+                <option key={module} value={module} />
+              ))}
+            </datalist>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">
+              Nama Test Case
+            </label>
+            <input
+              type="text"
+              list="title-options"
+              value={filterTitle}
+              onChange={(e) => setFilterTitle(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && applyFilters()}
+              placeholder="Cari atau pilih judul test case..."
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
+            />
+            <datalist id="title-options">
+              {titleOptions.map((title) => (
+                <option key={title} value={title} />
+              ))}
+            </datalist>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">
+              Priority
+            </label>
+            <select
+              value={filterPriority}
+              onChange={(e) => setFilterPriority(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
+            >
+              <option value="">Semua Priority</option>
+              {TEST_CASE_PRIORITIES.map((priority) => (
+                <option key={priority} value={priority}>
+                  {labelize(priority)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">
+              Status
+            </label>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
+            >
+              <option value="">Semua Status</option>
+              {TEST_CASE_STATUSES.map((status) => (
+                <option key={status} value={status}>
+                  {labelize(status)}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            onClick={resetFilters}
+            disabled={
+              !hasActiveFilters &&
+              !filterModule &&
+              !filterTitle &&
+              !filterPriority &&
+              !filterStatus
+            }
+            className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Reset
+          </button>
+          <button
+            onClick={applyFilters}
+            className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600"
+          >
+            Cari
+          </button>
+        </div>
+      </div>
+
+      <div className="mb-5 flex items-center gap-2 rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs text-emerald-800">
+        <ShieldCheck size={15} />
+        Akses Anda: {projectRole ? labelize(projectRole) : "No Access"}
       </div>
 
       <div className="grid grid-cols-4 gap-3 mb-5">
@@ -317,6 +689,10 @@ export default function TestCasePage() {
           <div className="text-center py-16 text-gray-400 text-sm">
             Belum ada test case. Tambah manual atau upload Excel.
           </div>
+        ) : filteredTestCases.length === 0 ? (
+          <div className="text-center py-16 text-gray-400 text-sm">
+            Tidak ada test case yang cocok dengan pencarian.
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -332,7 +708,7 @@ export default function TestCasePage() {
                     Judul
                   </th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">
-                    Cucumber Scenario
+                    Expected Result
                   </th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 w-24">
                     Priority
@@ -347,7 +723,7 @@ export default function TestCasePage() {
                 </tr>
               </thead>
               <tbody>
-                {testCases.map((tc, i) => (
+                {paginatedTestCases.map((tc, i) => (
                   <tr
                     key={tc.id}
                     className={`border-b border-gray-50 hover:bg-gray-50 transition-colors ${
@@ -361,7 +737,7 @@ export default function TestCasePage() {
                     <td className="px-4 py-3 text-gray-900 font-medium">
                       {tc.title}
                     </td>
-                    <td className="px-4 py-3 text-gray-900 font-medium whitespace-pre-line">
+                    <td className="px-4 py-3 text-gray-900 font-medium">
                       {tc.expected_result}
                     </td>
                     <td className="px-4 py-3">
@@ -377,13 +753,14 @@ export default function TestCasePage() {
                       <select
                         value={tc.status}
                         onChange={(e) => updateStatus(tc.id, e.target.value)}
+                        disabled={!editable}
                         className={`px-2 py-0.5 rounded-full text-xs font-medium border-0 cursor-pointer ${
                           STATUS_COLORS[tc.status]
                         }`}
                       >
-                        {Object.entries(STATUS_LABELS).map(([val, label]) => (
-                          <option key={val} value={val}>
-                            {label}
+                        {TEST_CASE_STATUSES.map((status) => (
+                          <option key={status} value={status}>
+                            {labelize(status)}
                           </option>
                         ))}
                       </select>
@@ -395,13 +772,17 @@ export default function TestCasePage() {
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => openEdit(tc)}
-                          className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors"
+                          disabled={!editable}
+                          className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
+                          title="Edit test case"
                         >
                           <Pencil size={13} />
                         </button>
                         <button
                           onClick={() => deleteTestCase(tc.id)}
-                          className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
+                          disabled={!editable}
+                          className="p-1.5 text-gray-400 hover:text-red-500 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
+                          title="Hapus test case"
                         >
                           <Trash2 size={13} />
                         </button>
@@ -411,6 +792,11 @@ export default function TestCasePage() {
                 ))}
               </tbody>
             </table>
+            <PaginationControls
+              page={page}
+              total={filteredTestCases.length}
+              onPageChange={setPage}
+            />
           </div>
         )}
       </div>
@@ -434,7 +820,11 @@ export default function TestCasePage() {
             </div>
             <div className="p-6 grid grid-cols-2 gap-4">
               {[
-                { label: "TC ID", key: "tc_id", placeholder: "TC-001" },
+                {
+                  label: "TC ID",
+                  key: "tc_id",
+                  placeholder: formatTestCaseCode(project?.name, 1),
+                },
                 { label: "Module", key: "module", placeholder: "Login" },
                 { label: "Tester", key: "tester", placeholder: "Nama tester" },
               ].map((f) => (
@@ -444,7 +834,7 @@ export default function TestCasePage() {
                   </label>
                   <input
                     type="text"
-                    value={(form as any)[f.key]}
+                    value={form[f.key as keyof TestCaseForm]}
                     onChange={(e) =>
                       setForm((p) => ({ ...p, [f.key]: e.target.value }))
                     }
@@ -464,10 +854,11 @@ export default function TestCasePage() {
                   }
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-emerald-400"
                 >
-                  <option value="critical">Critical</option>
-                  <option value="high">High</option>
-                  <option value="medium">Medium</option>
-                  <option value="low">Low</option>
+                  {TEST_CASE_PRIORITIES.map((priority) => (
+                    <option key={priority} value={priority}>
+                      {labelize(priority)}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -481,10 +872,11 @@ export default function TestCasePage() {
                   }
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-emerald-400"
                 >
-                  <option value="not_run">Not Run</option>
-                  <option value="pass">Pass</option>
-                  <option value="fail">Fail</option>
-                  <option value="skip">Skip</option>
+                  {TEST_CASE_STATUSES.map((status) => (
+                    <option key={status} value={status}>
+                      {labelize(status)}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div className="col-span-2">
@@ -528,7 +920,7 @@ export default function TestCasePage() {
                     {f.label}
                   </label>
                   <textarea
-                    value={(form as any)[f.key]}
+                    value={form[f.key as keyof TestCaseForm]}
                     onChange={(e) =>
                       setForm((p) => ({ ...p, [f.key]: e.target.value }))
                     }
@@ -557,6 +949,87 @@ export default function TestCasePage() {
                 <Check size={15} />
                 {editingId ? "Simpan Perubahan" : "Tambah Test Case"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAccessModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl">
+            <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+              <div className="flex items-center gap-2">
+                <Users size={18} className="text-emerald-600" />
+                <h2 className="font-semibold text-gray-900">Kelola Access</h2>
+              </div>
+              <button
+                onClick={() => setShowAccessModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="space-y-4 p-6">
+              <div className="grid grid-cols-[1fr_120px_auto] gap-2">
+                <input
+                  type="email"
+                  value={accessEmail}
+                  onChange={(e) => setAccessEmail(e.target.value)}
+                  placeholder="user@company.com"
+                  className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
+                />
+                <select
+                  value={accessRole}
+                  onChange={(e) => setAccessRole(e.target.value as AccessRole)}
+                  className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
+                >
+                  {ACCESS_ROLES.filter((role) => role !== "owner").map(
+                    (role) => (
+                      <option key={role} value={role}>
+                        {labelize(role)}
+                      </option>
+                    ),
+                  )}
+                </select>
+                <button
+                  onClick={saveAccessGrant}
+                  disabled={!accessEmail.trim()}
+                  className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
+                >
+                  Grant
+                </button>
+              </div>
+
+              <div className="overflow-hidden rounded-lg border border-gray-100">
+                {accessGrants.length === 0 ? (
+                  <div className="px-4 py-6 text-center text-sm text-gray-400">
+                    Belum ada user tambahan.
+                  </div>
+                ) : (
+                  accessGrants.map((grant) => (
+                    <div
+                      key={grant.id}
+                      className="flex items-center justify-between border-b border-gray-50 px-4 py-3 last:border-b-0"
+                    >
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {grant.user_email}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {labelize(grant.role)}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => removeAccessGrant(grant.id)}
+                        className="p-1.5 text-gray-400 hover:text-red-500"
+                        title="Hapus akses"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
         </div>

@@ -24,4 +24,7 @@ dist-ssr
 *.sw?
 
 .env
-.env.*
+.env.*/.cursor/skills/
+/.cursor/hooks/
+/.cursor-plugin/
+/.spark-lock.json
