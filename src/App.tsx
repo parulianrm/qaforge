@@ -13,8 +13,6 @@ import {
   LayoutDashboard,
   LogOut,
   Radio,
-  ShieldCheck,
-  UserCircle,
 } from "lucide-react";
 import "./lib/chart";
 import { useAuth } from "./hooks/useAuth";
@@ -104,17 +102,6 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
   return <AppLayout>{children}</AppLayout>;
 }
 
-function DashboardPage() {
-  return (
-    <div className="p-8 text-gray-500 text-sm">Dashboard — coming soon</div>
-  );
-}
-function RecorderPage() {
-  return (
-    <div className="p-8 text-gray-500 text-sm">Recorder — coming soon</div>
-  );
-}
-
 export default function App() {
   const { user, loading } = useAuth();
   if (loading)
@@ -135,7 +122,7 @@ export default function App() {
           path="/dashboard"
           element={
             <PrivateRoute>
-              <DashboardPage />
+              <Dashboard />
             </PrivateRoute>
           }
         />

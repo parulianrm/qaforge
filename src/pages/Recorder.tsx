@@ -648,26 +648,6 @@ export default function Recorder() {
   return (
     <div className="p-8 max-w-4xl">
       <div className="mb-6">
-<<<<<<< HEAD
-        <h1 className="text-xl font-semibold text-slate-900">Web Recorder</h1>
-        <p className="text-sm text-slate-500 mt-0.5">
-          Hasil rekaman dari Chrome Extension — simpan langsung sebagai test
-          case
-        </p>
-      </div>
-
-      {steps.length === 0 ? (
-        <div className="bg-white border border-dashed border-slate-300 rounded-xl p-12 text-center">
-          <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-4">
-            <RefreshCw size={20} className="text-slate-400" />
-          </div>
-          <p className="text-sm font-medium text-slate-600 mb-1">
-            Belum ada data rekaman
-          </p>
-          <p className="text-xs text-slate-400">
-            Gunakan Chrome Extension QAForge Recorder, rekam pengujian, lalu
-            klik "Kirim ke QAForge App"
-=======
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
             <Radio size={20} />
@@ -701,7 +681,6 @@ export default function Recorder() {
             <br />
             Ulangi untuk test case berikutnya, lalu klik{" "}
             <strong>"Kirim ke HavoX App"</strong>.
->>>>>>> 796ac8ba98aedb855fbe6e0a2bf6a4d2695c4795
           </p>
           <div className="inline-flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 text-xs text-gray-500">
             <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse" />
@@ -709,190 +688,6 @@ export default function Recorder() {
           </div>
         </div>
       ) : (
-<<<<<<< HEAD
-        <div className="grid grid-cols-2 gap-6">
-          {/* Kiri — Steps & Gherkin */}
-          <div className="flex flex-col gap-4">
-            {/* Tab switcher */}
-            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-              <div className="flex border-b border-slate-100">
-                <button
-                  onClick={() => setActiveTab("steps")}
-                  className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
-                    activeTab === "steps"
-                      ? "bg-white text-slate-900 border-b-2 border-indigo-600"
-                      : "text-slate-400 hover:text-slate-600"
-                  }`}
-                >
-                  Steps ({steps.length})
-                </button>
-                <button
-                  onClick={() => setActiveTab("gherkin")}
-                  className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
-                    activeTab === "gherkin"
-                      ? "bg-white text-slate-900 border-b-2 border-indigo-600"
-                      : "text-slate-400 hover:text-slate-600"
-                  }`}
-                >
-                  Gherkin
-                </button>
-              </div>
-
-              {activeTab === "steps" ? (
-                <div className="p-4 flex flex-col gap-2 max-h-96 overflow-y-auto">
-                  {steps.map((step, i) => (
-                    <div
-                      key={i}
-                      className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg"
-                    >
-                      <span className="text-xs text-slate-400 min-w-5 mt-0.5">
-                        {i + 1}.
-                      </span>
-                      <span className="text-sm text-slate-700 flex-1">
-                        {stepText(step)}
-                      </span>
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${
-                          STEP_COLORS[step.type]
-                        }`}
-                      >
-                        {step.type}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="p-4">
-                  <pre className="bg-slate-900 text-slate-100 rounded-lg p-4 text-xs leading-relaxed overflow-x-auto max-h-96 overflow-y-auto whitespace-pre-wrap">
-                    {gherkin}
-                  </pre>
-                  <button
-                    onClick={() => navigator.clipboard.writeText(gherkin)}
-                    className="mt-2 text-xs text-slate-400 hover:text-slate-600"
-                  >
-                    Salin ke clipboard
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Kanan — Simpan ke Test Case */}
-          <div className="bg-white border border-slate-200 rounded-xl p-5">
-            <h2 className="text-sm font-semibold text-slate-900 mb-4">
-              Simpan sebagai Test Case
-            </h2>
-
-            <div className="flex flex-col gap-3">
-              {/* Pilih Project */}
-              <div>
-                <label className="text-xs font-medium text-slate-600 mb-1 block">
-                  Project
-                </label>
-                <div className="relative">
-                  <select
-                    value={selectedProject}
-                    onChange={(e) => setSelectedProject(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-400 appearance-none bg-white"
-                  >
-                    <option value="">Pilih project...</option>
-                    {projects.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown
-                    size={14}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-                  />
-                </div>
-              </div>
-
-              {/* Judul Test Case */}
-              <div>
-                <label className="text-xs font-medium text-slate-600 mb-1 block">
-                  Judul Test Case
-                </label>
-                <input
-                  type="text"
-                  value={tcTitle}
-                  onChange={(e) => setTcTitle(e.target.value)}
-                  placeholder="contoh: Login dengan kredensial valid"
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-400"
-                />
-              </div>
-
-              {/* Priority */}
-              <div>
-                <label className="text-xs font-medium text-slate-600 mb-1 block">
-                  Priority
-                </label>
-                <div className="relative">
-                  <select
-                    value={tcPriority}
-                    onChange={(e) => setTcPriority(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-400 appearance-none bg-white"
-                  >
-                    <option value="critical">Critical</option>
-                    <option value="high">High</option>
-                    <option value="medium">Medium</option>
-                    <option value="low">Low</option>
-                  </select>
-                  <ChevronDown
-                    size={14}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-                  />
-                </div>
-              </div>
-
-              {/* Tester */}
-              <div>
-                <label className="text-xs font-medium text-slate-600 mb-1 block">
-                  Tester
-                </label>
-                <input
-                  type="text"
-                  value={tester}
-                  onChange={(e) => setTester(e.target.value)}
-                  placeholder="Nama tester"
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-400"
-                />
-              </div>
-
-              {/* Preview info */}
-              <div className="bg-slate-50 rounded-lg p-3 text-xs text-slate-500 space-y-1">
-                <div className="flex justify-between">
-                  <span>Total steps</span>
-                  <span className="font-medium text-slate-700">
-                    {steps.length} langkah
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Steps akan disimpan di</span>
-                  <span className="font-medium text-slate-700">
-                    kolom "Steps"
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Gherkin akan disimpan di</span>
-                  <span className="font-medium text-slate-700">
-                    kolom "Expected Result"
-                  </span>
-                </div>
-              </div>
-
-              {/* Tombol simpan */}
-              <button
-                onClick={saveToTestCase}
-                disabled={!selectedProject || !tcTitle.trim() || saving}
-                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <Save size={15} />
-                {saving
-                  ? "Menyimpan..."
-                  : saved
-=======
         <div className="flex flex-col gap-5">
           {/* Project selector + simpan */}
           <div className="bg-white border border-gray-200 rounded-xl p-4 flex items-end gap-4">
@@ -936,7 +731,6 @@ export default function Recorder() {
               {saving
                 ? "Menyimpan..."
                 : saved
->>>>>>> 796ac8ba98aedb855fbe6e0a2bf6a4d2695c4795
                   ? "Tersimpan!"
                   : `Simpan ${readyCount} TC`}
             </button>

@@ -133,13 +133,8 @@ export default function Projects() {
           </p>
         </div>
         <button
-<<<<<<< HEAD
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
-=======
           onClick={openCreate}
-          className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white text-sm font-medium rounded-lg hover:bg-emerald-600 transition-colors"
->>>>>>> 796ac8ba98aedb855fbe6e0a2bf6a4d2695c4795
+          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
         >
           <Plus size={16} />
           Project Baru
@@ -170,33 +165,24 @@ export default function Projects() {
                 <div className="w-9 h-9 bg-indigo-50 rounded-lg flex items-center justify-center">
                   <FolderOpen size={18} className="text-indigo-600" />
                 </div>
-<<<<<<< HEAD
-                <button
-                  onClick={(e) => deleteProject(project.id, e)}
-                  className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-red-500 transition-all"
-                >
-                  <Trash2 size={14} />
-                </button>
-=======
                 {isProjectOwner(project) && (
                   <div className="flex items-center gap-1">
                     <button
                       onClick={(e) => openEdit(project, e)}
-                      className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-blue-500 transition-all"
+                      className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-indigo-600 transition-all"
                       title="Edit project"
                     >
                       <Pencil size={14} />
                     </button>
                     <button
                       onClick={(e) => deleteProject(project.id, e)}
-                      className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-red-500 transition-all"
+                      className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-red-500 transition-all"
                       title="Hapus project"
                     >
                       <Trash2 size={14} />
                     </button>
                   </div>
                 )}
->>>>>>> 796ac8ba98aedb855fbe6e0a2bf6a4d2695c4795
               </div>
               <h3 className="font-semibold text-slate-900 text-sm mb-1">
                 {project.name}
@@ -204,20 +190,16 @@ export default function Projects() {
               <p className="text-xs text-slate-500 line-clamp-2">
                 {project.description || "Tidak ada deskripsi"}
               </p>
-<<<<<<< HEAD
-              <p className="text-xs text-slate-400 mt-3">
-=======
-              <div className="flex items-center gap-2 mt-4 text-xs text-gray-500">
-                <span className="rounded-full bg-gray-100 px-2 py-0.5">
+              <div className="flex items-center gap-2 mt-4 text-xs text-slate-500">
+                <span className="rounded-full bg-slate-100 px-2 py-0.5">
                   {summaries[project.id]?.modules || 0} module
                 </span>
-                <span className="rounded-full bg-gray-100 px-2 py-0.5">
+                <span className="rounded-full bg-slate-100 px-2 py-0.5">
                   {summaries[project.id]?.testCases || 0} test case
                 </span>
               </div>
-              <p className="text-xs text-gray-400 mt-3">
+              <p className="text-xs text-slate-400 mt-3">
                 Dibuat{" "}
->>>>>>> 796ac8ba98aedb855fbe6e0a2bf6a4d2695c4795
                 {new Date(project.created_at).toLocaleDateString("id-ID", {
                   day: "numeric",
                   month: "long",
@@ -233,13 +215,8 @@ export default function Projects() {
       {showModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
-<<<<<<< HEAD
             <h2 className="text-base font-semibold text-slate-900 mb-4">
-              Buat Project Baru
-=======
-            <h2 className="text-base font-semibold text-gray-900 mb-4">
               {editingProject ? "Edit Project" : "Buat Project Baru"}
->>>>>>> 796ac8ba98aedb855fbe6e0a2bf6a4d2695c4795
             </h2>
             <div className="flex flex-col gap-3">
               <div>
@@ -270,16 +247,11 @@ export default function Projects() {
             </div>
             <div className="flex gap-2 mt-5">
               <button
-<<<<<<< HEAD
-                onClick={() => setShowModal(false)}
-                className="flex-1 px-4 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50"
-=======
                 onClick={() => {
                   setShowModal(false);
                   setEditingProject(null);
                 }}
-                className="flex-1 px-4 py-2 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50"
->>>>>>> 796ac8ba98aedb855fbe6e0a2bf6a4d2695c4795
+                className="flex-1 px-4 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50"
               >
                 Batal
               </button>

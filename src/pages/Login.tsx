@@ -1,4 +1,4 @@
-import { LogIn, ShieldCheck } from "lucide-react";
+import { LogIn } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 
 export default function Login() {
@@ -8,21 +8,12 @@ export default function Login() {
     <div className="min-h-screen bg-slate-50 flex items-center justify-center">
       <div className="bg-white border border-slate-200 rounded-2xl p-10 w-full max-w-sm text-center shadow-sm">
         {/* Logo */}
-<<<<<<< HEAD
         <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center mx-auto mb-4">
           <span className="text-white font-semibold text-lg">QA</span>
         </div>
 
         <h1 className="text-xl font-semibold text-slate-900 mb-1">
           Masuk ke QAForge
-=======
-        <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center mx-auto mb-4">
-          <ShieldCheck size={26} className="text-white" />
-        </div>
-
-        <h1 className="text-xl font-semibold text-gray-900 mb-1">
-          Masuk ke HavoX
->>>>>>> 796ac8ba98aedb855fbe6e0a2bf6a4d2695c4795
         </h1>
         <p className="text-sm text-slate-500 mb-8">
           Platform manajemen pengujian untuk tim QA profesional

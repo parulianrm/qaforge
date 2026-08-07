@@ -9,7 +9,6 @@ import {
   Pencil,
   Trash2,
   Check,
-  ClipboardList,
   ShieldCheck,
   Users,
   X,
@@ -488,56 +487,29 @@ export default function TestCasePage() {
       <div className="flex items-center gap-3 mb-1">
         <button
           onClick={() => navigate("/projects")}
-<<<<<<< HEAD
           className="text-slate-400 hover:text-slate-600"
-=======
-          className="text-gray-400 hover:text-gray-600"
-          title="Kembali ke project"
->>>>>>> 796ac8ba98aedb855fbe6e0a2bf6a4d2695c4795
         >
           <ChevronLeft size={18} />
         </button>
-<<<<<<< HEAD
         <h1 className="text-xl font-semibold text-slate-900">{project?.name}</h1>
       </div>
       <p className="text-sm text-slate-500 mb-6 ml-7">{project?.description}</p>
-=======
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
-          <ClipboardList size={18} />
-        </div>
-        <h1 className="text-xl font-semibold text-gray-900">{project?.name}</h1>
-      </div>
-      <p className="text-sm text-gray-500 mb-6 ml-16">{project?.description}</p>
->>>>>>> 796ac8ba98aedb855fbe6e0a2bf6a4d2695c4795
 
       <div className="flex flex-wrap gap-2 mb-5">
         <button
           onClick={openCreate}
-<<<<<<< HEAD
           className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 cursor-pointer transition-colors"
-=======
-          disabled={!editable}
-          className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white text-sm font-medium rounded-lg hover:bg-emerald-600 transition-colors disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
->>>>>>> 796ac8ba98aedb855fbe6e0a2bf6a4d2695c4795
         >
           <Plus size={15} /> Tambah Test Case
         </button>
         <button
           onClick={downloadTemplate}
-<<<<<<< HEAD
           className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors"
         >
           <Download size={15} /> Unduh Template
         </button>
 
         <label className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
-=======
-          className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-sm text-gray-600 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
-        >
-          <Download size={15} /> Unduh Template
-        </button>
-        <label className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-sm text-gray-600 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
->>>>>>> 796ac8ba98aedb855fbe6e0a2bf6a4d2695c4795
           <Upload size={15} /> Upload Excel
           <input
             type="file"
@@ -550,11 +522,7 @@ export default function TestCasePage() {
         <button
           onClick={downloadTestCases}
           disabled={testCases.length === 0}
-<<<<<<< HEAD
           className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-=======
-          className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-sm text-gray-600 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
->>>>>>> 796ac8ba98aedb855fbe6e0a2bf6a4d2695c4795
         >
           <Download size={15} /> Download Test Cases
         </button>
@@ -734,13 +702,8 @@ export default function TestCasePage() {
                   <th className="text-left px-4 py-3 text-xs font-medium text-slate-500">
                     Judul
                   </th>
-<<<<<<< HEAD
                   <th className="text-left px-4 py-3 text-xs font-medium text-slate-500">
-                    Cucumber Scenario
-=======
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">
                     Expected Result
->>>>>>> 796ac8ba98aedb855fbe6e0a2bf6a4d2695c4795
                   </th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 w-24">
                     Priority
@@ -769,11 +732,7 @@ export default function TestCasePage() {
                     <td className="px-4 py-3 text-slate-900 font-medium">
                       {tc.title}
                     </td>
-<<<<<<< HEAD
                     <td className="px-4 py-3 text-slate-900 font-medium whitespace-pre-line">
-=======
-                    <td className="px-4 py-3 text-gray-900 font-medium">
->>>>>>> 796ac8ba98aedb855fbe6e0a2bf6a4d2695c4795
                       {tc.expected_result}
                     </td>
                     <td className="px-4 py-3">
@@ -808,25 +767,13 @@ export default function TestCasePage() {
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => openEdit(tc)}
-<<<<<<< HEAD
                           className="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors"
-=======
-                          disabled={!editable}
-                          className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
-                          title="Edit test case"
->>>>>>> 796ac8ba98aedb855fbe6e0a2bf6a4d2695c4795
                         >
                           <Pencil size={13} />
                         </button>
                         <button
                           onClick={() => deleteTestCase(tc.id)}
-<<<<<<< HEAD
                           className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
-=======
-                          disabled={!editable}
-                          className="p-1.5 text-gray-400 hover:text-red-500 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
-                          title="Hapus test case"
->>>>>>> 796ac8ba98aedb855fbe6e0a2bf6a4d2695c4795
                         >
                           <Trash2 size={13} />
                         </button>
