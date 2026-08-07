@@ -1,5 +1,5 @@
 {
-  "name": "qaforge",
+  "name": "havox",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -12,8 +12,13 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.103.0",
     "@tanstack/react-table": "^8.21.3",
+    "chart.js": "^4.5.1",
+    "exceljs": "^4.4.0",
+    "jodit": "^4.12.32",
+    "jodit-react": "^5.3.21",
     "lucide-react": "^1.8.0",
     "react": "^18.3.1",
+    "react-chartjs-2": "^5.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.14.0",
     "xlsx": "^0.18.5"
@@ -21,6 +26,7 @@
   "devDependencies": {
     "@eslint/js": "^9.13.0",
     "@tailwindcss/vite": "^4.2.2",
+    "@types/chrome": "^0.1.40",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",

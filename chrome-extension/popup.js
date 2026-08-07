@@ -2,7 +2,6 @@ var isRecording = false;
 var currentSteps = [];
 var allSessions = [];
 var currentTabId = null;
-var sessionName = '';
 
 document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('startBtn').addEventListener('click', startRecording);
@@ -17,78 +16,125 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    chrome.storage.local.get(['qaforge_sessions', 'qaforge_recording', 'qaforge_current_steps'], function (data) {
-        if (data.qaforge_sessions && data.qaforge_sessions.length) {
-            allSessions = data.qaforge_sessions;
+    chrome.storage.local.get(['havox_sessions', 'havox_recording', 'havox_current_steps', 'havox_project_id'], function (data) {
+        if (data.havox_sessions && data.havox_sessions.length) {
+            allSessions = data.havox_sessions;
             renderSessions();
         }
-        if (data.qaforge_recording) {
+        if (data.havox_recording) {
             isRecording = true;
-            currentSteps = data.qaforge_current_steps || [];
+            currentSteps = data.havox_current_steps || [];
             setRecordingUI(true);
+            updateCurrentCount(currentSteps.length);
+        }
+        if (data.havox_project_id) {
+            document.getElementById('projectInfo').textContent = 'Terhubung ke project';
+            document.getElementById('projectInfo').style.color = '#10b981';
         }
     });
+
+    // Update count tiap detik saat recording
+    setInterval(function () {
+        if (!isRecording) return;
+        chrome.storage.local.get(['havox_current_steps'], function (data) {
+            if (data.havox_current_steps) {
+                updateCurrentCount(data.havox_current_steps.length);
+            }
+        });
+    }, 1000);
 });
 
 function startRecording() {
     chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
         if (!tabs[0]) return;
         currentTabId = tabs[0].id;
+
         chrome.scripting.executeScript(
             { target: { tabId: currentTabId }, files: ['content.js'] },
             function () {
-                if (chrome.runtime.lastError) { console.error(chrome.runtime.lastError); return; }
+                if (chrome.runtime.lastError) {
+                    console.error('Inject error:', chrome.runtime.lastError.message);
+                    return;
+                }
                 setTimeout(function () {
                     chrome.tabs.sendMessage(currentTabId, { action: 'START_RECORDING' }, function (response) {
-                        if (chrome.runtime.lastError) { console.error(chrome.runtime.lastError); return; }
-                        isRecording = true;
-                        currentSteps = [];
-                        chrome.storage.local.set({ qaforge_recording: true, qaforge_current_steps: [] });
-                        setRecordingUI(true);
-                        updateCurrentCount(0);
+                        if (chrome.runtime.lastError) {
+                            console.error('Message error:', chrome.runtime.lastError.message);
+                            return;
+                        }
+                        if (response && response.status === 'started') {
+                            isRecording = true;
+                            currentSteps = [];
+                            chrome.storage.local.set({
+                                havox_recording: true,
+                                havox_current_steps: [],
+                                havox_tab_id: currentTabId
+                            });
+                            setRecordingUI(true);
+                            updateCurrentCount(0);
+                        }
                     });
-                }, 150);
+                }, 200);
             }
         );
     });
 }
 
 function stopRecording() {
-    if (!currentTabId) return;
-    chrome.tabs.sendMessage(currentTabId, { action: 'STOP_RECORDING' }, function (response) {
-        isRecording = false;
-        if (response && response.steps) currentSteps = response.steps;
+    chrome.storage.local.get(['havox_tab_id'], function (data) {
+        var tabId = data.havox_tab_id || currentTabId;
+        if (!tabId) return;
 
-        if (currentSteps.length > 0) {
-            // Simpan sebagai 1 session
-            var session = {
-                id: Date.now(),
-                steps: currentSteps,
-                stepCount: currentSteps.length,
-                url: currentSteps[0] ? currentSteps[0].url || '—' : '—',
-                timestamp: new Date().toLocaleTimeString('id-ID')
-            };
-            allSessions.push(session);
-            chrome.storage.local.set({
-                qaforge_recording: false,
-                qaforge_current_steps: [],
-                qaforge_sessions: allSessions
-            });
-        } else {
-            chrome.storage.local.set({ qaforge_recording: false });
-        }
-
-        setRecordingUI(false);
-        updateCurrentCount(0);
-        renderSessions();
+        chrome.tabs.sendMessage(tabId, { action: 'STOP_RECORDING' }, function (response) {
+            if (chrome.runtime.lastError) {
+                console.error('Stop error:', chrome.runtime.lastError.message);
+                // Coba ambil dari storage sebagai fallback
+                chrome.storage.local.get(['havox_current_steps'], function (stored) {
+                    processStoppedSteps(stored.havox_current_steps || []);
+                });
+                return;
+            }
+            var steps = (response && response.steps) ? response.steps : [];
+            processStoppedSteps(steps);
+        });
     });
+}
+
+function processStoppedSteps(steps) {
+    isRecording = false;
+    currentSteps = steps;
+
+    if (currentSteps.length > 0) {
+        var session = {
+            id: Date.now(),
+            steps: currentSteps,
+            stepCount: currentSteps.length,
+            url: currentSteps[0] ? (currentSteps[0].url || '—') : '—',
+            timestamp: new Date().toLocaleTimeString('id-ID')
+        };
+        allSessions.push(session);
+    }
+
+    chrome.storage.local.set({
+        havox_recording: false,
+        havox_current_steps: [],
+        havox_sessions: allSessions
+    });
+
+    setRecordingUI(false);
+    updateCurrentCount(0);
+    renderSessions();
 }
 
 function clearAll() {
     allSessions = [];
     currentSteps = [];
     isRecording = false;
-    chrome.storage.local.set({ qaforge_sessions: [], qaforge_recording: false, qaforge_current_steps: [] });
+    chrome.storage.local.set({
+        havox_sessions: [],
+        havox_recording: false,
+        havox_current_steps: []
+    });
     setRecordingUI(false);
     renderSessions();
     updateCurrentCount(0);
@@ -96,7 +142,7 @@ function clearAll() {
 
 function deleteSession(id) {
     allSessions = allSessions.filter(function (s) { return s.id !== id; });
-    chrome.storage.local.set({ qaforge_sessions: allSessions });
+    chrome.storage.local.set({ havox_sessions: allSessions });
     renderSessions();
 }
 
@@ -122,7 +168,7 @@ function renderSessions() {
     sendBtn.disabled = allSessions.length === 0;
 
     if (allSessions.length === 0) {
-        list.innerHTML = '<div class="empty">Belum ada test case. Start - Stop untuk merekam 1 test case.</div>';
+        list.innerHTML = '<div class="empty">Belum ada test case.<br>Start - Stop untuk merekam 1 test case.</div>';
         return;
     }
 
@@ -135,12 +181,11 @@ function renderSessions() {
             + '<span class="session-time">' + s.timestamp + '</span>'
             + '<button class="session-del" data-id="' + s.id + '">hapus</button>'
             + '</div>'
-            + '<div class="session-steps">' + s.stepCount + ' langkah</div>'
+            + '<div class="session-steps">' + s.stepCount + ' langkah direkam</div>'
             + '</div>';
     }
     list.innerHTML = html;
 
-    // Pasang event listener tombol hapus
     var delBtns = list.querySelectorAll('.session-del');
     for (var j = 0; j < delBtns.length; j++) {
         delBtns[j].addEventListener('click', function () {
@@ -149,22 +194,29 @@ function renderSessions() {
     }
 }
 
-// Update step count saat recording berlangsung
-setInterval(function () {
-    if (!isRecording || !currentTabId) return;
-    chrome.storage.local.get(['qaforge_current_steps'], function (data) {
-        if (data.qaforge_current_steps) {
-            updateCurrentCount(data.qaforge_current_steps.length);
-        }
-    });
-}, 1000);
-
 function sendToApp() {
-    var data = encodeURIComponent(JSON.stringify(allSessions));
-    var projectId = '';
-    chrome.storage.local.get(['qaforge_project_id'], function (stored) {
-        if (stored.qaforge_project_id) projectId = stored.qaforge_project_id;
-        var url = 'http://localhost:5173/recorder?sessions=' + data + (projectId ? '&projectId=' + projectId : '');
-        chrome.tabs.create({ url: url });
+    if (allSessions.length === 0) return;
+    var sessions = encodeURIComponent(JSON.stringify(allSessions));
+    var finalUrl = 'http://localhost:5173/recorder?sessions=' + sessions;
+
+    chrome.tabs.query({}, function (tabs) {
+        var havoxTab = null;
+        for (var i = 0; i < tabs.length; i++) {
+            if (tabs[i].url && tabs[i].url.indexOf('localhost:5173') !== -1) {
+                havoxTab = tabs[i];
+                break;
+            }
+        }
+        if (havoxTab) {
+            chrome.tabs.update(havoxTab.id, { url: finalUrl, active: true }, function () {
+                chrome.windows.update(havoxTab.windowId, { focused: true });
+            });
+        } else {
+            chrome.tabs.create({ url: finalUrl });
+        }
+
+        allSessions = [];
+        chrome.storage.local.set({ havox_sessions: [], havox_current_steps: [] });
+        renderSessions();
     });
 }

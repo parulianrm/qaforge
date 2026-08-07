@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import {
   BrowserRouter,
   Routes,
@@ -5,37 +6,63 @@ import {
   Navigate,
   useLocation,
 } from "react-router-dom";
+import {
+  Bug,
+  ClipboardList,
+  FileText,
+  LayoutDashboard,
+  LogOut,
+  Radio,
+  ShieldCheck,
+  UserCircle,
+} from "lucide-react";
+import "./lib/chart";
 import { useAuth } from "./hooks/useAuth";
 import Login from "./pages/Login";
 import Projects from "./pages/Project";
 import TestCase from "./pages/TestCase";
 import Recorder from "./pages/Recorder";
+import Dashboard from "./pages/Dashboard";
+import Defects from "./pages/Defects";
+
+const Templates = lazy(() => import("./pages/Templates"));
+
+function PageLoader() {
+  return (
+    <div className="flex min-h-[60vh] items-center justify-center">
+      <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+}
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, signOut } = useAuth();
   const location = useLocation();
 
   const navItems = [
-    { href: "/dashboard", label: "Dashboard" },
-    { href: "/projects", label: "Test Cases" },
-    { href: "/recorder", label: "Recorder" },
+    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/projects", label: "Test Cases", icon: ClipboardList },
+    { href: "/defects", label: "Defects", icon: Bug },
+    { href: "/templates", label: "Templates", icon: FileText },
+    { href: "/recorder", label: "Recorder", icon: Radio },
   ];
 
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="h-12 bg-white border-b border-slate-200 flex items-center justify-between px-6">
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 bg-indigo-600 rounded flex items-center justify-center">
+          <div className="w-6 h-6 bg-emerald-500 rounded flex items-center justify-center">
             <span className="text-white text-xs font-semibold">QA</span>
           </div>
-          <span className="font-semibold text-slate-900 text-sm">QAForge</span>
+          <span className="font-semibold text-gray-900 text-sm">QAForge</span>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-xs text-slate-500">{user?.email}</span>
+          <span className="text-xs text-gray-500">{user?.email}</span>
           <button
             onClick={signOut}
-            className="text-xs text-slate-500 hover:text-slate-700"
+            className="text-xs text-gray-500 hover:text-gray-700"
           >
+            <LogOut size={14} />
             Keluar
           </button>
         </div>
@@ -47,12 +74,13 @@ function AppLayout({ children }: { children: React.ReactNode }) {
               <a
                 key={item.href}
                 href={item.href}
-                className={`px-3 py-2 text-sm rounded-lg transition-colors ${
+                className={`flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors ${
                   location.pathname.startsWith(item.href)
                     ? "bg-indigo-50 text-indigo-600 font-medium"
                     : "text-slate-600 hover:bg-slate-100"
                 }`}
               >
+                <item.icon size={16} />
                 {item.label}
               </a>
             ))}
@@ -78,12 +106,12 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 
 function DashboardPage() {
   return (
-    <div className="p-8 text-slate-500 text-sm">Dashboard — coming soon</div>
+    <div className="p-8 text-gray-500 text-sm">Dashboard — coming soon</div>
   );
 }
 function RecorderPage() {
   return (
-    <div className="p-8 text-slate-500 text-sm">Recorder — coming soon</div>
+    <div className="p-8 text-gray-500 text-sm">Recorder — coming soon</div>
   );
 }
 
@@ -132,6 +160,24 @@ export default function App() {
           element={
             <PrivateRoute>
               <Recorder />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/defects"
+          element={
+            <PrivateRoute>
+              <Defects />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/templates"
+          element={
+            <PrivateRoute>
+              <Suspense fallback={<PageLoader />}>
+                <Templates />
+              </Suspense>
             </PrivateRoute>
           }
         />
