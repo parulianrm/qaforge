@@ -18,6 +18,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { CustomSelect } from "../components/CustomSelect";
 import {
   labelize,
   labelizeDefectStatus,
@@ -721,26 +722,20 @@ export default function Dashboard() {
               <div className="relative">
                 <Search
                   size={14}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-slate-400"
                 />
-                <select
+                <CustomSelect
                   value={selectedProjectId}
-                  onChange={(e) => setSelectedProjectId(e.target.value)}
-                  className="w-full appearance-none rounded-lg border border-white/10 bg-white/10 px-9 py-2 text-sm text-white outline-none transition focus:border-emerald-300"
-                >
-                  <option className="text-slate-900" value="">
-                    Semua project
-                  </option>
-                  {projects.map((project) => (
-                    <option
-                      className="text-slate-900"
-                      key={project.id}
-                      value={project.id}
-                    >
-                      {project.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setSelectedProjectId}
+                  options={[
+                    { value: "", label: "Semua project" },
+                    ...projects.map((project) => ({
+                      value: project.id,
+                      label: project.name,
+                    })),
+                  ]}
+                  triggerClassName="rounded-lg border border-white/10 bg-white/10 pl-9 pr-3 py-2 text-sm text-white outline-none transition focus:border-emerald-300"
+                />
               </div>
             </div>
           </div>

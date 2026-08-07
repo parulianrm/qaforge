@@ -6,6 +6,7 @@ export const PAGE_PERMISSIONS = [
   { key: "recorder", label: "Recorder" },
   { key: "manage_access", label: "Manage Access" },
   { key: "manage_roles", label: "Manage Roles" },
+  { key: "master_data", label: "Master Data" },
 ] as const;
 
 export type PagePermissionKey = (typeof PAGE_PERMISSIONS)[number]["key"];
@@ -92,5 +93,6 @@ export function defaultRolePermissions(): RolePermissions {
     recorder: true,
     manage_access: false,
     manage_roles: false,
+    master_data: false,
   };
 }

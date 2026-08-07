@@ -8,6 +8,7 @@ import {
   Users,
   Check,
   KeyRound,
+  Lock,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import {
@@ -18,6 +19,7 @@ import {
 } from "../lib/roles";
 import { ACCESS_ROLES, AccessRole, ProjectAccessGrant } from "../lib/access";
 import { Project } from "../types";
+import { CustomSelect } from "../components/CustomSelect";
 
 type AccessRow = {
   kind: "profile" | "invite";
@@ -370,18 +372,15 @@ export default function ManageAccess() {
             className="w-full rounded-lg border border-slate-200 py-2 pl-8 pr-3 text-sm focus:border-indigo-400 focus:outline-none"
           />
         </div>
-        <select
+        <CustomSelect
           value={roleFilter}
-          onChange={(e) => setRoleFilter(e.target.value)}
-          className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none"
-        >
-          <option value="">Semua role</option>
-          {roles.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.name}
-            </option>
-          ))}
-        </select>
+          onChange={setRoleFilter}
+          options={[
+            { value: "", label: "Semua role" },
+            ...roles.map((r) => ({ value: r.id, label: r.name })),
+          ]}
+          triggerClassName="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none"
+        />
         <span className="ml-auto text-xs text-slate-400">
           {filteredRows.length} user
         </span>
@@ -434,19 +433,30 @@ export default function ManageAccess() {
                         <p className="text-xs text-slate-500">{row.email}</p>
                       </td>
                       <td className="px-4 py-3">
-                        <select
-                          value={row.roleId}
-                          onChange={(e) => changeRole(row, e.target.value)}
-                          className={`rounded-full border-0 px-2 py-1 text-xs font-semibold focus:outline-none ${
-                            role ? ROLE_ACCENT_BADGE_CLASSES[role.accent] : ""
-                          }`}
-                        >
-                          {roles.map((r) => (
-                            <option key={r.id} value={r.id}>
-                              {r.name}
-                            </option>
-                          ))}
-                        </select>
+                        {row.roleId === "super-admin" ? (
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full py-1 pl-2 pr-1.5 text-xs font-semibold ${
+                              role ? ROLE_ACCENT_BADGE_CLASSES[role.accent] : ""
+                            }`}
+                            title="Role Super Admin tidak bisa diubah"
+                          >
+                            {role?.name || "Super Admin"}
+                            <Lock size={11} className="opacity-70" />
+                          </span>
+                        ) : (
+                          <CustomSelect
+                            value={row.roleId}
+                            onChange={(value) => changeRole(row, value)}
+                            chevronSize={12}
+                            options={roles.map((r) => ({
+                              value: r.id,
+                              label: r.name,
+                            }))}
+                            triggerClassName={`rounded-full py-1 pl-2 pr-1.5 text-xs font-semibold focus:outline-none ${
+                              role ? ROLE_ACCENT_BADGE_CLASSES[role.accent] : ""
+                            }`}
+                          />
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <button
@@ -471,6 +481,14 @@ export default function ManageAccess() {
                           <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700">
                             <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
                             Menunggu approval
+                          </span>
+                        ) : row.roleId === "super-admin" ? (
+                          <span
+                            className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700"
+                            title="Super Admin selalu aktif, tidak bisa dinonaktifkan"
+                          >
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                            Aktif
                           </span>
                         ) : (
                           <label className="inline-flex cursor-pointer items-center gap-2">
@@ -575,17 +593,12 @@ export default function ManageAccess() {
                 <label className="mb-1 block text-xs font-medium text-slate-600">
                   Role
                 </label>
-                <select
+                <CustomSelect
                   value={newRoleId}
-                  onChange={(e) => setNewRoleId(e.target.value)}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none"
-                >
-                  {roles.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setNewRoleId}
+                  options={roles.map((r) => ({ value: r.id, label: r.name }))}
+                  triggerClassName="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none"
+                />
                 <p className="mt-1.5 text-xs text-slate-400">
                   User berstatus "Menunggu login" sampai pertama kali sign-in
                   dengan email ini via Google. Role yang kamu atur sekarang
@@ -651,22 +664,23 @@ export default function ManageAccess() {
                       <span className="flex-1 truncate text-sm font-medium text-slate-800">
                         {project?.name || grant.project_id}
                       </span>
-                      <select
+                      <CustomSelect
                         value={grant.role}
-                        onChange={(e) =>
+                        onChange={(value) =>
                           updateDrawerAccessRole(
                             grant.id,
-                            e.target.value as AccessRole,
+                            value as AccessRole,
                           )
                         }
-                        className="rounded-md border border-slate-200 px-2 py-1 text-xs"
-                      >
-                        {ACCESS_ROLES.filter((r) => r !== "owner").map((r) => (
-                          <option key={r} value={r}>
-                            {r === "viewer" ? "Viewer" : "Editor"}
-                          </option>
-                        ))}
-                      </select>
+                        options={ACCESS_ROLES.filter(
+                          (r) => r !== "owner",
+                        ).map((r) => ({
+                          value: r,
+                          label: r === "viewer" ? "Viewer" : "Editor",
+                        }))}
+                        className="w-auto"
+                        triggerClassName="rounded-md border border-slate-200 px-2 py-1 text-xs"
+                      />
                       <button
                         onClick={() => removeDrawerAccess(grant.id)}
                         className="rounded-md p-1 text-slate-400 hover:bg-red-50 hover:text-red-500"
@@ -688,28 +702,31 @@ export default function ManageAccess() {
                 </p>
               ) : (
                 <div className="flex flex-wrap items-center gap-2">
-                  <select
+                  <CustomSelect
                     value={addAccessProjectId}
-                    onChange={(e) => setAddAccessProjectId(e.target.value)}
-                    className="flex-1 rounded-md border border-slate-200 px-2 py-1.5 text-xs"
-                  >
-                    <option value="">Pilih project...</option>
-                    {drawerAvailableProjects.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                  <select
+                    onChange={setAddAccessProjectId}
+                    options={[
+                      { value: "", label: "Pilih project..." },
+                      ...drawerAvailableProjects.map((p) => ({
+                        value: p.id,
+                        label: p.name,
+                      })),
+                    ]}
+                    className="flex-1"
+                    triggerClassName="rounded-md border border-slate-200 px-2 py-1.5 text-xs"
+                  />
+                  <CustomSelect
                     value={addAccessRole}
-                    onChange={(e) =>
-                      setAddAccessRole(e.target.value as AccessRole)
+                    onChange={(value) =>
+                      setAddAccessRole(value as AccessRole)
                     }
-                    className="rounded-md border border-slate-200 px-2 py-1.5 text-xs"
-                  >
-                    <option value="viewer">Viewer</option>
-                    <option value="editor">Editor</option>
-                  </select>
+                    options={[
+                      { value: "viewer", label: "Viewer" },
+                      { value: "editor", label: "Editor" },
+                    ]}
+                    className="w-auto"
+                    triggerClassName="rounded-md border border-slate-200 px-2 py-1.5 text-xs"
+                  />
                   <button
                     onClick={addDrawerAccess}
                     disabled={!addAccessProjectId}

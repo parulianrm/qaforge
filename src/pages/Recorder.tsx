@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Save, ChevronDown, X, Check, Copy, Radio } from "lucide-react";
+import { Save, X, Check, Copy, Radio } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import {
   normalizeTestCasePriority,
@@ -9,6 +9,7 @@ import {
 import { formatTestCaseCode } from "../lib/testCaseCode";
 import { getUserDisplayName } from "../lib/userProfile";
 import { useAuth } from "../hooks/useAuth";
+import { CustomSelect } from "../components/CustomSelect";
 import { Project } from "../types";
 
 interface RecorderStep {
@@ -695,24 +696,15 @@ export default function Recorder() {
               <label className="text-xs font-medium text-gray-600 mb-1 block">
                 Simpan ke Project
               </label>
-              <div className="relative">
-                <select
-                  value={selectedProject}
-                  onChange={(e) => setSelectedProject(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-emerald-400 appearance-none bg-white"
-                >
-                  <option value="">Pilih project...</option>
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  size={14}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
-                />
-              </div>
+              <CustomSelect
+                value={selectedProject}
+                onChange={setSelectedProject}
+                options={[
+                  { value: "", label: "Pilih project..." },
+                  ...projects.map((p) => ({ value: p.id, label: p.name })),
+                ]}
+                triggerClassName="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-emerald-400 bg-white"
+              />
             </div>
             <div className="text-center px-4">
               <div className="text-2xl font-semibold text-emerald-600">
@@ -854,19 +846,21 @@ export default function Recorder() {
                           <label className="text-xs font-medium text-gray-600 mb-1 block">
                             Priority
                           </label>
-                          <select
-                            value={form.priority}
-                            onChange={(e) =>
-                              updateForm(session.id, "priority", e.target.value)
-                            }
-                            onClick={(e) => e.stopPropagation()}
-                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-emerald-400"
-                          >
-                            <option value="critical">Critical</option>
-                            <option value="high">High</option>
-                            <option value="medium">Medium</option>
-                            <option value="low">Low</option>
-                          </select>
+                          <div onClick={(e) => e.stopPropagation()}>
+                            <CustomSelect
+                              value={form.priority}
+                              onChange={(value) =>
+                                updateForm(session.id, "priority", value)
+                              }
+                              options={[
+                                { value: "critical", label: "Critical" },
+                                { value: "high", label: "High" },
+                                { value: "medium", label: "Medium" },
+                                { value: "low", label: "Low" },
+                              ]}
+                              triggerClassName="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-emerald-400"
+                            />
+                          </div>
                         </div>
                         <div>
                           <label className="text-xs font-medium text-gray-600 mb-1 block">

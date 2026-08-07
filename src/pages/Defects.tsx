@@ -27,49 +27,37 @@ import {
   getLocalProjectRole,
 } from "../lib/access";
 import {
-  DEFECT_PRIORITIES,
-  DEFECT_STATUSES,
   labelize,
   labelizeDefectStatus,
   normalizeDefectPriority,
   normalizeDefectStatus,
 } from "../lib/domain";
+import {
+  fetchOptionLists,
+  optionsFor,
+  OptionListItem,
+} from "../lib/optionLists";
 import { getUserDisplayName } from "../lib/userProfile";
 import { useAuth } from "../hooks/useAuth";
+import { useProfile } from "../hooks/useProfile";
+import {
+  hasPagePermission,
+  ROLE_ACCENT_BADGE_CLASSES,
+  RoleAccent,
+} from "../lib/roles";
+import { UserEmailAutocomplete } from "../components/UserEmailAutocomplete";
+import { CustomSelect } from "../components/CustomSelect";
 import { Defect, Project } from "../types";
 
-const PRIORITY_OPTIONS = DEFECT_PRIORITIES;
-const STATUS_OPTIONS = DEFECT_STATUSES;
 const PAGE_SIZE = 10;
 
-const PRIORITY_COLORS: Record<string, string> = {
-  blocker: "bg-slate-200 text-slate-700",
-  high: "bg-red-100 text-red-700",
-  medium: "bg-amber-100 text-amber-700",
-  low: "bg-green-100 text-green-700",
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  open: "bg-slate-100 text-slate-700",
-  in_development: "bg-blue-100 text-blue-700",
-  done_development: "bg-indigo-100 text-indigo-700",
-  on_check: "bg-purple-100 text-purple-700",
-  solved: "bg-emerald-100 text-emerald-700",
-  gwind_issue: "bg-amber-100 text-amber-700",
-  hold: "bg-orange-100 text-orange-700",
-  re_open: "bg-red-100 text-red-700",
-};
-
-const STATUS_STAT_COLORS: Record<string, string> = {
-  open: "text-slate-600",
-  in_development: "text-blue-600",
-  done_development: "text-indigo-600",
-  on_check: "text-purple-600",
-  solved: "text-emerald-600",
-  gwind_issue: "text-amber-600",
-  hold: "text-orange-600",
-  re_open: "text-red-600",
-};
+function accentTextClass(accent: RoleAccent) {
+  return (
+    ROLE_ACCENT_BADGE_CLASSES[accent]
+      .split(" ")
+      .find((c) => c.startsWith("text-")) || "text-gray-900"
+  );
+}
 
 function formatIssueId(projectName: string | undefined, sequence: number) {
   const words =
@@ -286,6 +274,8 @@ function PaginationControls({
 
 export default function DefectsPage() {
   const { user } = useAuth();
+  const { role: systemRole } = useProfile(user);
+  const isSystemAdmin = hasPagePermission(systemRole, "manage_access");
   const defaultReporter = getUserDisplayName(user);
   const [projects, setProjects] = useState<Project[]>([]);
   const [defects, setDefects] = useState<Defect[]>([]);
@@ -298,10 +288,46 @@ export default function DefectsPage() {
   const [accessGrants, setAccessGrants] = useState<ProjectAccessGrant[]>([]);
   const [accessEmail, setAccessEmail] = useState("");
   const [accessRole, setAccessRole] = useState<AccessRole>("viewer");
+  const [knownUsers, setKnownUsers] = useState<
+    { email: string; full_name: string | null }[]
+  >([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ ...emptyForm, reporter: defaultReporter });
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [optionItems, setOptionItems] = useState<OptionListItem[]>([]);
+
+  const priorityOptions = useMemo(
+    () => optionsFor(optionItems, "defect_priority"),
+    [optionItems],
+  );
+  const statusOptions = useMemo(
+    () => optionsFor(optionItems, "defect_status"),
+    [optionItems],
+  );
+  const priorityValues = useMemo(
+    () => priorityOptions.map((o) => o.value),
+    [priorityOptions],
+  );
+  const statusValues = useMemo(
+    () => statusOptions.map((o) => o.value),
+    [statusOptions],
+  );
+  const defaultPriority =
+    priorityOptions.find((o) => o.is_default)?.value ??
+    priorityOptions[0]?.value ??
+    "medium";
+  const defaultStatus =
+    statusOptions.find((o) => o.is_default)?.value ??
+    statusOptions[0]?.value ??
+    "open";
+
+  function badgeColor(options: OptionListItem[], value: string) {
+    const option = options.find((o) => o.value === value);
+    return option
+      ? ROLE_ACCENT_BADGE_CLASSES[option.accent]
+      : ROLE_ACCENT_BADGE_CLASSES.slate;
+  }
 
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId),
@@ -311,11 +337,18 @@ export default function DefectsPage() {
     () => getLocalProjectRole(selectedProject || null, user, accessGrants),
     [accessGrants, selectedProject, user],
   );
-  const editable = canEdit(projectRole);
-  const manageable = canManageAccess(projectRole);
+  const editable = canEdit(projectRole) || isSystemAdmin;
+  const manageable = canManageAccess(projectRole) || isSystemAdmin;
 
   useEffect(() => {
     fetchProjects();
+  }, []);
+
+  useEffect(() => {
+    supabase.rpc("directory_users").then(({ data }) => {
+      if (data) setKnownUsers(data);
+    });
+    fetchOptionLists().then(setOptionItems);
   }, []);
 
   useEffect(() => {
@@ -450,6 +483,8 @@ export default function DefectsPage() {
       database_name: "",
       reporter: defaultReporter,
       issue_id: formatIssueId(selectedProject?.name, defects.length + 1),
+      priority: defaultPriority,
+      status: defaultStatus,
     });
     setEditingId(null);
   }
@@ -473,9 +508,12 @@ export default function DefectsPage() {
       reported_at: toInputDate(defect.reported_at || defect.created_at),
       issue_id: defect.issue_id || defect.def_id || "",
       description: defect.description || defect.title || "",
-      priority: normalizeDefectPriority(defect.priority || defect.severity),
+      priority: normalizeDefectPriority(
+        defect.priority || defect.severity,
+        priorityValues,
+      ),
       attachment: defect.attachment || "",
-      status: normalizeDefectStatus(defect.status),
+      status: normalizeDefectStatus(defect.status, statusValues),
       handled_by: defect.handled_by || "",
       developer_notes: defect.developer_notes || "",
       merge_request: defect.merge_request || "",
@@ -498,10 +536,10 @@ export default function DefectsPage() {
       issue_id: form.issue_id,
       title: form.description.split("\n")[0].slice(0, 120),
       description: form.description,
-      priority: normalizeDefectPriority(form.priority),
-      severity: normalizeDefectPriority(form.priority),
+      priority: normalizeDefectPriority(form.priority, priorityValues),
+      severity: normalizeDefectPriority(form.priority, priorityValues),
       attachment: form.attachment,
-      status: normalizeDefectStatus(form.status),
+      status: normalizeDefectStatus(form.status, statusValues),
       handled_by: form.handled_by,
       developer_notes: form.developer_notes,
       merge_request: form.merge_request,
@@ -532,7 +570,7 @@ export default function DefectsPage() {
 
   async function updateDefectStatus(id: string, status: string) {
     if (!editable) return;
-    const normalized = normalizeDefectStatus(status);
+    const normalized = normalizeDefectStatus(status, statusValues);
     setDefects((prev) =>
       prev.map((defect) =>
         defect.id === id ? { ...defect, status: normalized } : defect,
@@ -541,6 +579,23 @@ export default function DefectsPage() {
     const { error } = await supabase
       .from("defects")
       .update({ status: normalized })
+      .eq("id", id);
+    if (error) fetchDefects();
+  }
+
+  async function updateDefectPriority(id: string, priority: string) {
+    if (!editable) return;
+    const normalized = normalizeDefectPriority(priority, priorityValues);
+    setDefects((prev) =>
+      prev.map((defect) =>
+        defect.id === id
+          ? { ...defect, priority: normalized, severity: normalized }
+          : defect,
+      ),
+    );
+    const { error } = await supabase
+      .from("defects")
+      .update({ priority: normalized, severity: normalized })
       .eq("id", id);
     if (error) fetchDefects();
   }
@@ -666,7 +721,9 @@ export default function DefectsPage() {
     sheet.getCell("C6").value = "Defect";
 
     const countFor = (status: string) =>
-      defects.filter((d) => normalizeDefectStatus(d.status) === status).length;
+      defects.filter(
+        (d) => normalizeDefectStatus(d.status, statusValues) === status,
+      ).length;
     const summaryRows: Array<[number, string, number]> = [
       [2, "Defect Open", countFor("open")],
       [3, "Defect In Development/Fixing", countFor("in_development")],
@@ -703,8 +760,9 @@ export default function DefectsPage() {
       const row = sheet.getRow(DEFECT_HEADER_ROW + 1 + index);
       const priorityKey = normalizeDefectPriority(
         defect.priority || defect.severity,
+        priorityValues,
       );
-      const statusKey = normalizeDefectStatus(defect.status);
+      const statusKey = normalizeDefectStatus(defect.status, statusValues);
 
       row.getCell(1).value = defect.reporter || "";
       row.getCell(2).value = formatDisplayDate(
@@ -735,7 +793,7 @@ export default function DefectsPage() {
       }
 
       const statusCell = row.getCell(7);
-      statusCell.value = labelizeDefectStatus(defect.status);
+      statusCell.value = labelizeDefectStatus(defect.status, statusOptions);
       const statusStyle = STATUS_FILLS[statusKey] || {
         bg: "FFFFFFFF",
         font: "FF000000",
@@ -813,7 +871,10 @@ export default function DefectsPage() {
         .filter((row) => row["Description"] || row["Issue ID"])
         .map((row, index) => {
           const description = cellText(row["Description"]);
-          const priority = normalizeDefectPriority(row["Priority"]);
+          const priority = normalizeDefectPriority(
+            row["Priority"],
+            priorityValues,
+          );
           return {
             project_id: selectedProjectId,
             module: moduleName,
@@ -830,7 +891,7 @@ export default function DefectsPage() {
             priority,
             severity: priority,
             attachment: cellText(row["Attachment"]),
-            status: normalizeDefectStatus(row["Status"]),
+            status: normalizeDefectStatus(row["Status"], statusValues),
             handled_by: cellText(row["Handled By"]),
             developer_notes: cellText(row["Developer Notes"]),
             qa_notes: cellText(row["QA Notes"]),
@@ -848,10 +909,13 @@ export default function DefectsPage() {
     e.target.value = "";
   }
 
-  const statusCounts = DEFECT_STATUSES.map((status) => ({
-    status,
-    count: defects.filter((d) => normalizeDefectStatus(d.status) === status)
-      .length,
+  const statusCounts = statusOptions.map((option) => ({
+    status: option.value,
+    label: option.label,
+    accent: option.accent,
+    count: defects.filter(
+      (d) => normalizeDefectStatus(d.status, statusValues) === option.value,
+    ).length,
   }));
 
   return (
@@ -876,17 +940,15 @@ export default function DefectsPage() {
           <label className="mb-1 block text-xs font-medium text-gray-500">
             Project
           </label>
-          <select
+          <CustomSelect
             value={selectedProjectId}
-            onChange={(e) => setSelectedProjectId(e.target.value)}
-            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
-          >
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
+            onChange={setSelectedProjectId}
+            options={projects.map((project) => ({
+              value: project.id,
+              label: project.name,
+            }))}
+            triggerClassName="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
+          />
         </div>
       </div>
 
@@ -945,7 +1007,12 @@ export default function DefectsPage() {
 
       <div className="mb-5 flex items-center gap-2 rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs text-emerald-800">
         <ShieldCheck size={15} />
-        Akses Anda: {projectRole ? labelize(projectRole) : "No Access"}
+        Akses Anda:{" "}
+        {projectRole
+          ? labelize(projectRole)
+          : isSystemAdmin
+            ? "Admin"
+            : "No Access"}
       </div>
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
@@ -955,16 +1022,14 @@ export default function DefectsPage() {
             {defects.length}
           </p>
         </div>
-        {statusCounts.map(({ status, count }) => (
+        {statusCounts.map(({ status, label, accent, count }) => (
           <div
             key={status}
             className="rounded-xl border border-gray-200 bg-white p-4"
           >
-            <p className="text-xs text-gray-500">
-              {labelizeDefectStatus(status)}
-            </p>
+            <p className="text-xs text-gray-500">{label}</p>
             <p
-              className={`mt-1 text-2xl font-semibold ${STATUS_STAT_COLORS[status] || "text-gray-900"}`}
+              className={`mt-1 text-2xl font-semibold ${accentTextClass(accent)}`}
             >
               {count}
             </p>
@@ -1050,11 +1115,29 @@ export default function DefectsPage() {
                       {defect.description || defect.title}
                     </td>
                     <td className="px-3 py-3">
-                      <span
-                        className={`inline-block whitespace-nowrap rounded-full px-2 py-1 text-xs font-semibold ${PRIORITY_COLORS[normalizeDefectPriority(defect.priority || defect.severity)] || "bg-gray-100 text-gray-600"}`}
-                      >
-                        {labelize(defect.priority || defect.severity)}
-                      </span>
+                      <CustomSelect
+                        value={normalizeDefectPriority(
+                          defect.priority || defect.severity,
+                          priorityValues,
+                        )}
+                        onChange={(value) =>
+                          updateDefectPriority(defect.id, value)
+                        }
+                        disabled={!editable}
+                        chevronSize={12}
+                        options={priorityOptions.map((option) => ({
+                          value: option.value,
+                          label: option.label,
+                        }))}
+                        className="inline-block w-auto"
+                        triggerClassName={`whitespace-nowrap rounded-full py-1 pl-2 pr-1.5 text-xs font-semibold cursor-pointer ${badgeColor(
+                          priorityOptions,
+                          normalizeDefectPriority(
+                            defect.priority || defect.severity,
+                            priorityValues,
+                          ),
+                        )}`}
+                      />
                     </td>
                     <td className="px-3 py-3">
                       <LinkChip
@@ -1068,20 +1151,25 @@ export default function DefectsPage() {
                       />
                     </td>
                     <td className="px-3 py-3">
-                      <select
-                        value={normalizeDefectStatus(defect.status)}
-                        onChange={(e) =>
-                          updateDefectStatus(defect.id, e.target.value)
+                      <CustomSelect
+                        value={normalizeDefectStatus(
+                          defect.status,
+                          statusValues,
+                        )}
+                        onChange={(value) =>
+                          updateDefectStatus(defect.id, value)
                         }
                         disabled={!editable}
-                        className={`w-full cursor-pointer rounded-full border-0 px-2 py-1 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-400 disabled:cursor-not-allowed ${STATUS_COLORS[normalizeDefectStatus(defect.status)] || "bg-gray-100 text-gray-600"}`}
-                      >
-                        {STATUS_OPTIONS.map((status) => (
-                          <option key={status} value={status}>
-                            {labelizeDefectStatus(status)}
-                          </option>
-                        ))}
-                      </select>
+                        chevronSize={12}
+                        options={statusOptions.map((option) => ({
+                          value: option.value,
+                          label: option.label,
+                        }))}
+                        triggerClassName={`cursor-pointer rounded-full py-1 pl-2 pr-1.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-400 disabled:cursor-not-allowed ${badgeColor(
+                          statusOptions,
+                          normalizeDefectStatus(defect.status, statusValues),
+                        )}`}
+                      />
                     </td>
                     <td className="whitespace-pre-wrap wrap-break-word px-3 py-3 text-gray-600">
                       {defect.handled_by || "-"}
@@ -1159,19 +1247,17 @@ export default function DefectsPage() {
                 <label className="mb-1 block text-xs font-medium text-gray-600">
                   Project
                 </label>
-                <select
+                <CustomSelect
                   value={form.project_id}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, project_id: e.target.value }))
+                  onChange={(value) =>
+                    setForm((prev) => ({ ...prev, project_id: value }))
                   }
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
-                >
-                  {projects.map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.name}
-                    </option>
-                  ))}
-                </select>
+                  options={projects.map((project) => ({
+                    value: project.id,
+                    label: project.name,
+                  }))}
+                  triggerClassName="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
+                />
               </div>
               {[
                 ["Modul Name", "module", "Reimbursement"],
@@ -1207,37 +1293,33 @@ export default function DefectsPage() {
                 <label className="mb-1 block text-xs font-medium text-gray-600">
                   Priority
                 </label>
-                <select
+                <CustomSelect
                   value={form.priority}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, priority: e.target.value }))
+                  onChange={(value) =>
+                    setForm((prev) => ({ ...prev, priority: value }))
                   }
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
-                >
-                  {PRIORITY_OPTIONS.map((priority) => (
-                    <option key={priority} value={priority}>
-                      {labelize(priority)}
-                    </option>
-                  ))}
-                </select>
+                  options={priorityOptions.map((option) => ({
+                    value: option.value,
+                    label: option.label,
+                  }))}
+                  triggerClassName="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
+                />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-600">
                   Status
                 </label>
-                <select
+                <CustomSelect
                   value={form.status}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, status: e.target.value }))
+                  onChange={(value) =>
+                    setForm((prev) => ({ ...prev, status: value }))
                   }
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
-                >
-                  {STATUS_OPTIONS.map((status) => (
-                    <option key={status} value={status}>
-                      {labelizeDefectStatus(status)}
-                    </option>
-                  ))}
-                </select>
+                  options={statusOptions.map((option) => ({
+                    value: option.value,
+                    label: option.label,
+                  }))}
+                  triggerClassName="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
+                />
               </div>
               {[
                 ["Description", "description", "Module > deskripsi defect"],
@@ -1312,26 +1394,20 @@ export default function DefectsPage() {
             </div>
             <div className="space-y-4 p-6">
               <div className="grid grid-cols-[1fr_120px_auto] gap-2">
-                <input
-                  type="email"
+                <UserEmailAutocomplete
                   value={accessEmail}
-                  onChange={(e) => setAccessEmail(e.target.value)}
-                  placeholder="user@company.com"
-                  className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
+                  onChange={setAccessEmail}
+                  users={knownUsers}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
                 />
-                <select
+                <CustomSelect
                   value={accessRole}
-                  onChange={(e) => setAccessRole(e.target.value as AccessRole)}
-                  className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
-                >
-                  {ACCESS_ROLES.filter((role) => role !== "owner").map(
-                    (role) => (
-                      <option key={role} value={role}>
-                        {labelize(role)}
-                      </option>
-                    ),
+                  onChange={(value) => setAccessRole(value as AccessRole)}
+                  options={ACCESS_ROLES.filter((role) => role !== "owner").map(
+                    (role) => ({ value: role, label: labelize(role) }),
                   )}
-                </select>
+                  triggerClassName="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
+                />
                 <button
                   onClick={saveAccessGrant}
                   disabled={!accessEmail.trim()}

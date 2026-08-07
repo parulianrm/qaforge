@@ -1,3 +1,8 @@
+// Fallback/seed values — used only until the admin-configurable Master
+// Data list (option_lists table, see src/lib/optionLists.ts) has loaded, or
+// as the legacy-alias table for normalizing messy/old data (Excel imports,
+// inconsistent casing). The real source of truth for what values exist is
+// the database now, not these arrays.
 export const TEST_CASE_STATUSES = ["not_run", "pass", "fail", "skip"] as const;
 export const TEST_CASE_PRIORITIES = [
   "critical",
@@ -31,11 +36,6 @@ export const DEFECT_STATUS_LABELS: Record<
 };
 export const DEFECT_PRIORITIES = ["blocker", "high", "medium", "low"] as const;
 
-export type TestCaseStatus = (typeof TEST_CASE_STATUSES)[number];
-export type TestCasePriority = (typeof TEST_CASE_PRIORITIES)[number];
-export type DefectStatus = (typeof DEFECT_STATUSES)[number];
-export type DefectPriority = (typeof DEFECT_PRIORITIES)[number];
-
 export function normalizeValue(value?: string | number | null) {
   return (value == null ? "" : String(value))
     .trim()
@@ -51,30 +51,48 @@ export function labelize(value?: string | number | null) {
     .join(" ");
 }
 
+/**
+ * Every normalize* function below now takes an optional `validValues` list
+ * (the current Master Data options for that category). If the input
+ * exactly matches one of those — which is always true for values chosen
+ * from the app's own dropdowns — it's returned as-is, so admin-added custom
+ * values work everywhere. The hardcoded fuzzy-alias checks after that stay
+ * as a fallback for messy legacy input (old Excel exports, mixed casing)
+ * that predates whatever is currently configured.
+ */
+
 export function normalizeTestCaseStatus(
   status?: string | number | null,
-): TestCaseStatus {
+  validValues?: readonly string[],
+): string {
   const normalized = normalizeValue(status);
+  if (validValues?.includes(normalized)) return normalized;
   if (normalized === "pass" || normalized === "passed") return "pass";
   if (normalized === "fail" || normalized === "failed") return "fail";
   if (normalized === "skip" || normalized === "skipped") return "skip";
-  return "not_run";
+  if (normalized === "not_run") return "not_run";
+  return validValues?.[0] ?? "not_run";
 }
 
 export function normalizeTestCasePriority(
   priority?: string | number | null,
-): TestCasePriority {
+  validValues?: readonly string[],
+): string {
   const normalized = normalizeValue(priority);
+  if (validValues?.includes(normalized)) return normalized;
   if (normalized === "critical") return "critical";
   if (normalized === "high") return "high";
   if (normalized === "low") return "low";
-  return "medium";
+  if (normalized === "medium") return "medium";
+  return validValues?.[0] ?? "medium";
 }
 
 export function normalizeDefectStatus(
   status?: string | number | null,
-): DefectStatus {
+  validValues?: readonly string[],
+): string {
   const normalized = normalizeValue(status).replace(/\//g, "_");
+  if (validValues?.includes(normalized)) return normalized;
   if (["re_open", "reopen", "reopened"].includes(normalized)) return "re_open";
   if (["hold", "on_hold", "paused"].includes(normalized)) return "hold";
   if (["gwind_issue", "gwind"].includes(normalized)) return "gwind_issue";
@@ -109,17 +127,31 @@ export function normalizeDefectStatus(
     return "in_development";
   if (["solved", "resolved", "fixed", "closed"].includes(normalized))
     return "solved";
-  return "open";
+  if (normalized === "open") return "open";
+  return validValues?.[0] ?? "open";
 }
 
-export function labelizeDefectStatus(status?: string | number | null) {
-  return DEFECT_STATUS_LABELS[normalizeDefectStatus(status)];
+export function labelizeDefectStatus(
+  status?: string | number | null,
+  options?: { value: string; label: string }[],
+) {
+  const normalized = normalizeDefectStatus(
+    status,
+    options?.map((o) => o.value),
+  );
+  return (
+    options?.find((o) => o.value === normalized)?.label ??
+    DEFECT_STATUS_LABELS[normalized as keyof typeof DEFECT_STATUS_LABELS] ??
+    labelize(normalized)
+  );
 }
 
 export function normalizeDefectPriority(
   priority?: string | number | null,
-): DefectPriority {
+  validValues?: readonly string[],
+): string {
   const normalized = normalizeValue(priority);
+  if (validValues?.includes(normalized)) return normalized;
   if (normalized === "blocker" || normalized === "critical") return "blocker";
   if (normalized === "high" || normalized === "major") return "high";
   if (
@@ -128,5 +160,6 @@ export function normalizeDefectPriority(
     normalized === "trivial"
   )
     return "low";
-  return "medium";
+  if (normalized === "medium") return "medium";
+  return validValues?.[0] ?? "medium";
 }

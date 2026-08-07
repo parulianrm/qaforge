@@ -23,31 +23,24 @@ import {
   getLocalProjectRole,
 } from "../lib/access";
 import {
-  TEST_CASE_PRIORITIES,
-  TEST_CASE_STATUSES,
   labelize,
   normalizeTestCasePriority,
   normalizeTestCaseStatus,
 } from "../lib/domain";
+import {
+  fetchOptionLists,
+  optionsFor,
+  OptionListItem,
+} from "../lib/optionLists";
 import { formatTestCaseCode } from "../lib/testCaseCode";
 import { getUserDisplayName } from "../lib/userProfile";
 import { useAuth } from "../hooks/useAuth";
+import { useProfile } from "../hooks/useProfile";
+import { hasPagePermission, ROLE_ACCENT_BADGE_CLASSES } from "../lib/roles";
+import { UserEmailAutocomplete } from "../components/UserEmailAutocomplete";
+import { CustomSelect } from "../components/CustomSelect";
 import { TestCase, Project } from "../types";
 import * as XLSX from "xlsx";
-
-const PRIORITY_COLORS: Record<string, string> = {
-  critical: "bg-red-100 text-red-700",
-  high: "bg-amber-100 text-amber-700",
-  medium: "bg-blue-100 text-blue-700",
-  low: "bg-green-100 text-green-700",
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  pass: "bg-emerald-100 text-emerald-700",
-  fail: "bg-red-100 text-red-700",
-  skip: "bg-gray-100 text-gray-600",
-  not_run: "bg-gray-100 text-gray-400",
-};
 
 const PAGE_SIZE = 10;
 type TestCaseForm = {
@@ -111,6 +104,8 @@ export default function TestCasePage() {
   const { projectId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { role: systemRole } = useProfile(user);
+  const isSystemAdmin = hasPagePermission(systemRole, "manage_access");
   const defaultTester = getUserDisplayName(user);
 
   const [project, setProject] = useState<Project | null>(null);
@@ -132,7 +127,11 @@ export default function TestCasePage() {
   const [accessGrants, setAccessGrants] = useState<ProjectAccessGrant[]>([]);
   const [accessEmail, setAccessEmail] = useState("");
   const [accessRole, setAccessRole] = useState<AccessRole>("viewer");
+  const [knownUsers, setKnownUsers] = useState<
+    { email: string; full_name: string | null }[]
+  >([]);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [optionItems, setOptionItems] = useState<OptionListItem[]>([]);
   const [form, setForm] = useState<TestCaseForm>({
     tc_id: "",
     module: "",
@@ -145,6 +144,38 @@ export default function TestCasePage() {
     status: "not_run",
     tester: "",
   });
+
+  const priorityOptions = useMemo(
+    () => optionsFor(optionItems, "test_case_priority"),
+    [optionItems],
+  );
+  const statusOptions = useMemo(
+    () => optionsFor(optionItems, "test_case_status"),
+    [optionItems],
+  );
+  const priorityValues = useMemo(
+    () => priorityOptions.map((o) => o.value),
+    [priorityOptions],
+  );
+  const statusValues = useMemo(
+    () => statusOptions.map((o) => o.value),
+    [statusOptions],
+  );
+  const defaultPriority =
+    priorityOptions.find((o) => o.is_default)?.value ??
+    priorityOptions[0]?.value ??
+    "medium";
+  const defaultStatus =
+    statusOptions.find((o) => o.is_default)?.value ??
+    statusOptions[0]?.value ??
+    "not_run";
+
+  function badgeColor(options: OptionListItem[], value: string) {
+    const option = options.find((o) => o.value === value);
+    return option
+      ? ROLE_ACCENT_BADGE_CLASSES[option.accent]
+      : ROLE_ACCENT_BADGE_CLASSES.slate;
+  }
 
   useEffect(() => {
     if (projectId) {
@@ -160,21 +191,12 @@ export default function TestCasePage() {
     }
   }, [projectId]);
 
-  const moduleOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(testCases.map((tc) => tc.module).filter(Boolean)),
-      ).sort(),
-    [testCases],
-  );
-
-  const titleOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(testCases.map((tc) => tc.title).filter(Boolean)),
-      ).sort(),
-    [testCases],
-  );
+  useEffect(() => {
+    supabase.rpc("directory_users").then(({ data }) => {
+      if (data) setKnownUsers(data);
+    });
+    fetchOptionLists().then(setOptionItems);
+  }, []);
 
   const hasActiveFilters = Boolean(
     appliedFilters.module ||
@@ -230,8 +252,8 @@ export default function TestCasePage() {
     () => getLocalProjectRole(project, user, accessGrants),
     [accessGrants, project, user],
   );
-  const editable = canEdit(projectRole);
-  const manageable = canManageAccess(projectRole);
+  const editable = canEdit(projectRole) || isSystemAdmin;
+  const manageable = canManageAccess(projectRole) || isSystemAdmin;
 
   async function fetchProject() {
     const { data } = await supabase
@@ -299,8 +321,8 @@ export default function TestCasePage() {
       steps: "",
       expected_result: "",
       actual_result: "",
-      priority: "medium",
-      status: "not_run",
+      priority: defaultPriority,
+      status: defaultStatus,
       tester: defaultTester,
     });
     setEditingId(null);
@@ -344,15 +366,15 @@ export default function TestCasePage() {
         .from("test_cases")
         .update({
           ...form,
-          priority: normalizeTestCasePriority(form.priority),
-          status: normalizeTestCaseStatus(form.status),
+          priority: normalizeTestCasePriority(form.priority, priorityValues),
+          status: normalizeTestCaseStatus(form.status, statusValues),
         })
         .eq("id", editingId);
     } else {
       await supabase.from("test_cases").insert({
         ...form,
-        priority: normalizeTestCasePriority(form.priority),
-        status: normalizeTestCaseStatus(form.status),
+        priority: normalizeTestCasePriority(form.priority, priorityValues),
+        status: normalizeTestCaseStatus(form.status, statusValues),
         project_id: projectId,
       });
     }
@@ -395,6 +417,12 @@ export default function TestCasePage() {
   async function updateStatus(id: string, status: string) {
     if (!editable) return;
     await supabase.from("test_cases").update({ status }).eq("id", id);
+    fetchTestCases();
+  }
+
+  async function updatePriority(id: string, priority: string) {
+    if (!editable) return;
+    await supabase.from("test_cases").update({ priority }).eq("id", id);
     fetchTestCases();
   }
 
@@ -471,8 +499,8 @@ export default function TestCasePage() {
         steps: cellText(row["Steps"]),
         expected_result: cellText(row["Expected Result"]),
         actual_result: cellText(row["Actual Result"]),
-        priority: normalizeTestCasePriority(row["Priority"]),
-        status: normalizeTestCaseStatus(row["Status"]),
+        priority: normalizeTestCasePriority(row["Priority"], priorityValues),
+        status: normalizeTestCaseStatus(row["Status"], statusValues),
         tester: cellText(row["Tester"]),
       }));
       await supabase.from("test_cases").insert(inserts);
@@ -551,18 +579,12 @@ export default function TestCasePage() {
             </label>
             <input
               type="text"
-              list="module-options"
               value={filterModule}
               onChange={(e) => setFilterModule(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && applyFilters()}
-              placeholder="Cari atau pilih module..."
+              placeholder="Cari module..."
               className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
             />
-            <datalist id="module-options">
-              {moduleOptions.map((module) => (
-                <option key={module} value={module} />
-              ))}
-            </datalist>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">
@@ -570,52 +592,46 @@ export default function TestCasePage() {
             </label>
             <input
               type="text"
-              list="title-options"
               value={filterTitle}
               onChange={(e) => setFilterTitle(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && applyFilters()}
-              placeholder="Cari atau pilih judul test case..."
+              placeholder="Cari judul test case..."
               className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
             />
-            <datalist id="title-options">
-              {titleOptions.map((title) => (
-                <option key={title} value={title} />
-              ))}
-            </datalist>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">
               Priority
             </label>
-            <select
+            <CustomSelect
               value={filterPriority}
-              onChange={(e) => setFilterPriority(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
-            >
-              <option value="">Semua Priority</option>
-              {TEST_CASE_PRIORITIES.map((priority) => (
-                <option key={priority} value={priority}>
-                  {labelize(priority)}
-                </option>
-              ))}
-            </select>
+              onChange={setFilterPriority}
+              options={[
+                { value: "", label: "Semua Priority" },
+                ...priorityOptions.map((option) => ({
+                  value: option.value,
+                  label: option.label,
+                })),
+              ]}
+              triggerClassName="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
+            />
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">
               Status
             </label>
-            <select
+            <CustomSelect
               value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
-            >
-              <option value="">Semua Status</option>
-              {TEST_CASE_STATUSES.map((status) => (
-                <option key={status} value={status}>
-                  {labelize(status)}
-                </option>
-              ))}
-            </select>
+              onChange={setFilterStatus}
+              options={[
+                { value: "", label: "Semua Status" },
+                ...statusOptions.map((option) => ({
+                  value: option.value,
+                  label: option.label,
+                })),
+              ]}
+              triggerClassName="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
+            />
           </div>
         </div>
         <div className="mt-4 flex justify-end gap-2">
@@ -643,7 +659,12 @@ export default function TestCasePage() {
 
       <div className="mb-5 flex items-center gap-2 rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs text-emerald-800">
         <ShieldCheck size={15} />
-        Akses Anda: {projectRole ? labelize(projectRole) : "No Access"}
+        Akses Anda:{" "}
+        {projectRole
+          ? labelize(projectRole)
+          : isSystemAdmin
+            ? "Admin"
+            : "No Access"}
       </div>
 
       <div className="grid grid-cols-4 gap-3 mb-5">
@@ -736,29 +757,38 @@ export default function TestCasePage() {
                       {tc.expected_result}
                     </td>
                     <td className="px-4 py-3">
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                          PRIORITY_COLORS[tc.priority]
-                        }`}
-                      >
-                        {tc.priority}
-                      </span>
+                      <CustomSelect
+                        value={tc.priority}
+                        onChange={(value) => updatePriority(tc.id, value)}
+                        disabled={!editable}
+                        chevronSize={12}
+                        options={priorityOptions.map((option) => ({
+                          value: option.value,
+                          label: option.label,
+                        }))}
+                        className="inline-block w-auto"
+                        triggerClassName={`py-0.5 pl-2 pr-1.5 rounded-full text-xs font-medium cursor-pointer ${badgeColor(
+                          priorityOptions,
+                          tc.priority,
+                        )}`}
+                      />
                     </td>
                     <td className="px-4 py-3">
-                      <select
+                      <CustomSelect
                         value={tc.status}
-                        onChange={(e) => updateStatus(tc.id, e.target.value)}
+                        onChange={(value) => updateStatus(tc.id, value)}
                         disabled={!editable}
-                        className={`px-2 py-0.5 rounded-full text-xs font-medium border-0 cursor-pointer ${
-                          STATUS_COLORS[tc.status]
-                        }`}
-                      >
-                        {TEST_CASE_STATUSES.map((status) => (
-                          <option key={status} value={status}>
-                            {labelize(status)}
-                          </option>
-                        ))}
-                      </select>
+                        chevronSize={12}
+                        options={statusOptions.map((option) => ({
+                          value: option.value,
+                          label: option.label,
+                        }))}
+                        className="inline-block w-auto"
+                        triggerClassName={`py-0.5 pl-2 pr-1.5 rounded-full text-xs font-medium cursor-pointer ${badgeColor(
+                          statusOptions,
+                          tc.status,
+                        )}`}
+                      />
                     </td>
                     <td className="px-4 py-3 text-slate-500 text-xs">
                       {tc.tester || "—"}
@@ -838,37 +868,33 @@ export default function TestCasePage() {
                 <label className="text-xs font-medium text-slate-600 mb-1 block">
                   Priority
                 </label>
-                <select
+                <CustomSelect
                   value={form.priority}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, priority: e.target.value }))
+                  onChange={(value) =>
+                    setForm((p) => ({ ...p, priority: value }))
                   }
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-400"
-                >
-                  {TEST_CASE_PRIORITIES.map((priority) => (
-                    <option key={priority} value={priority}>
-                      {labelize(priority)}
-                    </option>
-                  ))}
-                </select>
+                  options={priorityOptions.map((option) => ({
+                    value: option.value,
+                    label: option.label,
+                  }))}
+                  triggerClassName="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-400"
+                />
               </div>
               <div>
                 <label className="text-xs font-medium text-slate-600 mb-1 block">
                   Status
                 </label>
-                <select
+                <CustomSelect
                   value={form.status}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, status: e.target.value }))
+                  onChange={(value) =>
+                    setForm((p) => ({ ...p, status: value }))
                   }
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-400"
-                >
-                  {TEST_CASE_STATUSES.map((status) => (
-                    <option key={status} value={status}>
-                      {labelize(status)}
-                    </option>
-                  ))}
-                </select>
+                  options={statusOptions.map((option) => ({
+                    value: option.value,
+                    label: option.label,
+                  }))}
+                  triggerClassName="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-400"
+                />
               </div>
               <div className="col-span-2">
                 <label className="text-xs font-medium text-slate-600 mb-1 block">
@@ -962,26 +988,20 @@ export default function TestCasePage() {
             </div>
             <div className="space-y-4 p-6">
               <div className="grid grid-cols-[1fr_120px_auto] gap-2">
-                <input
-                  type="email"
+                <UserEmailAutocomplete
                   value={accessEmail}
-                  onChange={(e) => setAccessEmail(e.target.value)}
-                  placeholder="user@company.com"
-                  className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
+                  onChange={setAccessEmail}
+                  users={knownUsers}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
                 />
-                <select
+                <CustomSelect
                   value={accessRole}
-                  onChange={(e) => setAccessRole(e.target.value as AccessRole)}
-                  className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
-                >
-                  {ACCESS_ROLES.filter((role) => role !== "owner").map(
-                    (role) => (
-                      <option key={role} value={role}>
-                        {labelize(role)}
-                      </option>
-                    ),
+                  onChange={(value) => setAccessRole(value as AccessRole)}
+                  options={ACCESS_ROLES.filter((role) => role !== "owner").map(
+                    (role) => ({ value: role, label: labelize(role) }),
                   )}
-                </select>
+                  triggerClassName="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
+                />
                 <button
                   onClick={saveAccessGrant}
                   disabled={!accessEmail.trim()}

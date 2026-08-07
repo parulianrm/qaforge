@@ -1,10 +1,3 @@
-import type {
-  DefectPriority,
-  DefectStatus,
-  TestCasePriority,
-  TestCaseStatus,
-} from "../lib/domain";
-
 export interface Project {
   id: string;
   name: string;
@@ -30,8 +23,10 @@ export interface TestCase {
   steps?: string;
   expected_result?: string;
   actual_result?: string;
-  priority: TestCasePriority;
-  status: TestCaseStatus;
+  // Priority/status values come from the admin-configurable Master Data
+  // list (option_lists table) — not a fixed compile-time union anymore.
+  priority: string;
+  status: string;
   tester?: string;
   test_type?: string;
   created_by?: string;
@@ -47,8 +42,9 @@ export interface Defect {
   title: string;
   module?: string;
   description?: string;
-  priority?:
-    DefectPriority | "critical" | "BLOCKER" | "HIGH" | "MEDIUM" | "LOW";
+  // Priority/status values come from the admin-configurable Master Data
+  // list (option_lists table) — not a fixed compile-time union anymore.
+  priority?: string;
   attachment?: string;
   developer_notes?: string;
   merge_request?: string;
@@ -57,17 +53,8 @@ export interface Defect {
   database_name?: string;
   handled_by?: string;
   updated_at?: string;
-  severity:
-    DefectPriority | "critical" | "CRITICAL" | "MAJOR" | "MINOR" | "TRIVIAL";
-  status:
-    | DefectStatus
-    | "resolved"
-    | "OPEN"
-    | "IN_PROGRESS"
-    | "FIXED"
-    | "RETEST"
-    | "CLOSED"
-    | "REJECTED";
+  severity: string;
+  status: string;
   related_tc_id?: string;
   reporter?: string;
   reported_at?: string;

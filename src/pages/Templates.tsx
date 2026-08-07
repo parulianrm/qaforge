@@ -13,6 +13,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { CustomSelect } from "../components/CustomSelect";
 import { DocumentTemplate, Project, TestCase } from "../types";
 import { labelize } from "../lib/domain";
 import { useAuth } from "../hooks/useAuth";
@@ -687,39 +688,39 @@ export default function Templates() {
             <label className="mb-1 block text-xs font-medium text-gray-500">
               Template
             </label>
-            <select
+            <CustomSelect
               value={selectedTemplateId}
-              onChange={(e) => {
-                const template = templates.find((row) => row.id === e.target.value);
+              onChange={(value) => {
+                const template = templates.find((row) => row.id === value);
                 if (template) loadTemplate(template);
               }}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
-            >
-              <option value="">Template baru</option>
-              {templates.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {template.name}
-                </option>
-              ))}
-            </select>
+              options={[
+                { value: "", label: "Template baru" },
+                ...templates.map((template) => ({
+                  value: template.id,
+                  label: template.name,
+                })),
+              ]}
+              triggerClassName="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
+            />
           </div>
 
           <div className="rounded-lg border border-gray-200 bg-white p-4">
             <label className="mb-1 block text-xs font-medium text-gray-500">
               Project Source
             </label>
-            <select
+            <CustomSelect
               value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
-            >
-              <option value="">Pilih project</option>
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
+              onChange={setSelectedProjectId}
+              options={[
+                { value: "", label: "Pilih project" },
+                ...projects.map((project) => ({
+                  value: project.id,
+                  label: project.name,
+                })),
+              ]}
+              triggerClassName="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
+            />
             <p className="mt-2 text-xs text-gray-400">
               {testCases.length} test case akan masuk ke QAD.
             </p>

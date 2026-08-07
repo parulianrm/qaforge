@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState } from "react";
 import {
   BrowserRouter,
   Routes,
@@ -9,13 +9,18 @@ import {
 } from "react-router-dom";
 import {
   Bug,
+  ChevronDown,
   ClipboardList,
+  Database,
   FileText,
   LayoutDashboard,
+  Layers,
   LogOut,
   Radio,
+  Shield,
   ShieldCheck,
   Users,
+  type LucideIcon,
 } from "lucide-react";
 import "./lib/chart";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
@@ -29,6 +34,7 @@ import Dashboard from "./pages/Dashboard";
 import Defects from "./pages/Defects";
 import ManageAccess from "./pages/ManageAccess";
 import ManageRoles from "./pages/ManageRoles";
+import MasterData from "./pages/MasterData";
 
 const Templates = lazy(() => import("./pages/Templates"));
 
@@ -36,6 +42,76 @@ function PageLoader() {
   return (
     <div className="flex min-h-[60vh] items-center justify-center">
       <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+}
+
+const NAV_GROUP_STORAGE_KEY = "qaforge_nav_groups";
+
+function loadExpandedGroups(): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(NAV_GROUP_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+type NavLinkItem = {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+};
+
+function NavGroup({
+  groupKey,
+  label,
+  icon: Icon,
+  items,
+  expanded,
+  onToggle,
+  isActive,
+}: {
+  groupKey: string;
+  label: string;
+  icon: LucideIcon;
+  items: NavLinkItem[];
+  expanded: boolean;
+  onToggle: (key: string) => void;
+  isActive: (href: string) => boolean;
+}) {
+  if (items.length === 0) return null;
+  return (
+    <div className="mt-1">
+      <button
+        onClick={() => onToggle(groupKey)}
+        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+      >
+        <Icon size={14} />
+        <span className="flex-1 text-left">{label}</span>
+        <ChevronDown
+          size={14}
+          className={`transition-transform ${expanded ? "" : "-rotate-90"}`}
+        />
+      </button>
+      {expanded && (
+        <div className="mt-0.5 flex flex-col gap-1">
+          {items.map((item) => (
+            <Link
+              key={item.href}
+              to={item.href}
+              className={`flex items-center gap-2 rounded-lg py-2 pl-8 pr-3 text-sm transition-colors ${
+                isActive(item.href)
+                  ? "bg-indigo-50 text-indigo-600 font-medium"
+                  : "text-slate-600 hover:bg-slate-100"
+              }`}
+            >
+              <item.icon size={16} />
+              {item.label}
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -50,16 +126,29 @@ function AppLayout({
   const { user, signOut } = useAuth();
   const { role, profile, loading: roleLoading, error } = useProfile(user);
   const location = useLocation();
+  const [expandedGroups, setExpandedGroups] = useState(loadExpandedGroups);
 
-  const navItems = [
-    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  function toggleGroup(key: string) {
+    setExpandedGroups((prev) => {
+      const next = { ...prev, [key]: !isGroupExpanded(key, prev) };
+      localStorage.setItem(NAV_GROUP_STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
+  }
+  function isGroupExpanded(key: string, source = expandedGroups) {
+    return source[key] ?? true;
+  }
+  function isActive(href: string) {
+    return location.pathname.startsWith(href);
+  }
+
+  const qaToolsItems: NavLinkItem[] = [
     { href: "/projects", label: "Test Cases", icon: ClipboardList },
     { href: "/defects", label: "Defects", icon: Bug },
-    { href: "/templates", label: "Templates", icon: FileText },
     { href: "/recorder", label: "Recorder", icon: Radio },
   ];
 
-  const adminNavItems = [
+  const adminNavItems: NavLinkItem[] = [
     {
       href: "/manage-access",
       label: "Manage Access",
@@ -71,6 +160,12 @@ function AppLayout({
       label: "Manage Roles",
       icon: ShieldCheck,
       permission: "manage_roles" as const,
+    },
+    {
+      href: "/master-data",
+      label: "Master Data",
+      icon: Database,
+      permission: "master_data" as const,
     },
   ].filter((item) => hasPagePermission(role, item.permission));
 
@@ -97,40 +192,52 @@ function AppLayout({
       <div className="flex">
         <aside className="w-48 min-h-screen bg-white border-r border-slate-200 pt-4">
           <nav className="flex flex-col gap-1 px-3">
-            {navItems.map((item) => (
-              <Link
-                key={item.href}
-                to={item.href}
-                className={`flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors ${
-                  location.pathname.startsWith(item.href)
-                    ? "bg-indigo-50 text-indigo-600 font-medium"
-                    : "text-slate-600 hover:bg-slate-100"
-                }`}
-              >
-                <item.icon size={16} />
-                {item.label}
-              </Link>
-            ))}
+            <Link
+              to="/dashboard"
+              className={`flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors ${
+                isActive("/dashboard")
+                  ? "bg-indigo-50 text-indigo-600 font-medium"
+                  : "text-slate-600 hover:bg-slate-100"
+              }`}
+            >
+              <LayoutDashboard size={16} />
+              Dashboard
+            </Link>
+
+            <NavGroup
+              groupKey="qa-tools"
+              label="QA Tools"
+              icon={Layers}
+              items={qaToolsItems}
+              expanded={isGroupExpanded("qa-tools")}
+              onToggle={toggleGroup}
+              isActive={isActive}
+            />
+
+            <Link
+              to="/templates"
+              className={`mt-1 flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors ${
+                isActive("/templates")
+                  ? "bg-indigo-50 text-indigo-600 font-medium"
+                  : "text-slate-600 hover:bg-slate-100"
+              }`}
+            >
+              <FileText size={16} />
+              Templates
+            </Link>
+
             {adminNavItems.length > 0 && (
-              <>
-                <div className="mt-2 mb-1 px-3 pt-2 text-[10.5px] font-medium uppercase tracking-wide text-slate-400 border-t border-slate-100">
-                  Administrasi
-                </div>
-                {adminNavItems.map((item) => (
-                  <Link
-                    key={item.href}
-                    to={item.href}
-                    className={`flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors ${
-                      location.pathname.startsWith(item.href)
-                        ? "bg-indigo-50 text-indigo-600 font-medium"
-                        : "text-slate-600 hover:bg-slate-100"
-                    }`}
-                  >
-                    <item.icon size={16} />
-                    {item.label}
-                  </Link>
-                ))}
-              </>
+              <div className="mt-2 border-t border-slate-100 pt-2">
+                <NavGroup
+                  groupKey="administrasi"
+                  label="Administrasi"
+                  icon={Shield}
+                  items={adminNavItems}
+                  expanded={isGroupExpanded("administrasi")}
+                  onToggle={toggleGroup}
+                  isActive={isActive}
+                />
+              </div>
             )}
           </nav>
         </aside>
@@ -178,9 +285,9 @@ function PendingApproval({ email }: { email: string }) {
           Menunggu persetujuan admin
         </p>
         <p className="text-sm text-slate-500">
-          Akun <span className="font-medium text-slate-700">{email}</span>{" "}
-          sudah terdaftar, tapi belum diaktifkan oleh admin QAForge. Hubungi
-          admin untuk mempercepat persetujuan.
+          Akun <span className="font-medium text-slate-700">{email}</span> sudah
+          terdaftar, tapi belum diaktifkan oleh admin QAForge. Hubungi admin
+          untuk mempercepat persetujuan.
         </p>
       </div>
     </div>
@@ -211,7 +318,9 @@ function AccessDenied({
           </p>
           <p>
             <span className="text-slate-400">Role terbaca:</span>{" "}
-            {role ? `${role.name} (id: ${role.id})` : "tidak ada / gagal dimuat"}
+            {role
+              ? `${role.name} (id: ${role.id})`
+              : "tidak ada / gagal dimuat"}
           </p>
           <p className="break-all">
             <span className="text-slate-400">Permission role ini:</span>{" "}
@@ -321,6 +430,14 @@ function AppRoutes() {
           element={
             <PrivateRoute requiredPage="manage_roles">
               <ManageRoles />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/master-data"
+          element={
+            <PrivateRoute requiredPage="master_data">
+              <MasterData />
             </PrivateRoute>
           }
         />
